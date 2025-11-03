@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -22,6 +22,15 @@ import {
   Plus,
 } from "lucide-react";
 
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import {
+  createAuPairProfileAndLink,
+  patchAuPairProfile,
+  saveAuPairPhotos,
+} from "@/lib/profile-actions";
+
 interface AuPairProfileCreateProps {
   onComplete: () => void;
 }
@@ -41,21 +50,21 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
     age: "",
     nationality: "",
     currentLocation: "",
-    
+
     // Step 2: Photo & Bio
     photo: null as File | null,
     galleryPhotos: [] as File[],
     bio: "",
-    
+
     // Step 3: Skills & Languages
     skills: [] as string[],
     languages: [] as { language: string; level: string }[],
-    
+
     // Step 4: Experience
     childcareExperience: "",
     previousExperience: "",
     certifications: [] as string[],
-    
+
     // Step 5: Preferences
     availableFrom: "",
     duration: "",
@@ -63,8 +72,158 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
   });
 
   const [newSkill, setNewSkill] = useState("");
-  const [newLanguage, setNewLanguage] = useState({ language: "", level: "Intermediate" });
+  const [newLanguage, setNewLanguage] = useState({
+    language: "",
+    level: "Intermediate",
+  });
   const [newLocation, setNewLocation] = useState("");
+
+  const [profileId, setProfileId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) return;
+      const us = await getDoc(doc(db, "users", u.uid));
+      const profileRef: string | undefined = us.exists()
+        ? us.data().profileRef
+        : undefined;
+      if (profileRef) {
+        const [, id] = profileRef.split("/");
+        setProfileId(id);
+      } else {
+        // Create minimal profile and link it
+        const id = await createAuPairProfileAndLink(u.uid, {
+          name: `${profileData.firstName} ${profileData.lastName}`.trim(),
+          age: profileData.age ? Number(profileData.age) : null,
+          nationality: profileData.nationality || "",
+          aboutMe: "",
+        });
+        setProfileId(id);
+      }
+    });
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function parseCityCountry(input: string) {
+    const parts = input.split(",").map((s) => s.trim());
+    if (parts.length >= 2) {
+      const country = parts.pop() as string;
+      const city = parts.join(", ");
+      return { city, country };
+    }
+    return { city: input, country: "" };
+  }
+
+  function mapLanguageLevel(level: string) {
+    const table: Record<
+      string,
+      "basic" | "intermediate" | "advanced" | "fluent" | "native"
+    > = {
+      Basic: "basic",
+      Intermediate: "intermediate",
+      Advanced: "advanced",
+      Native: "native",
+    };
+    return table[level] || "basic";
+  }
+
+  // Ensure the auPairProfiles doc exists before any Storage write
+  async function ensureAuPairProfileExists(currentProfileId: string | null) {
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error("Not authenticated");
+
+    if (currentProfileId) {
+      const s = await getDoc(doc(db, "auPairProfiles", currentProfileId));
+      if (s.exists() && s.data()?.userId === uid) {
+        return currentProfileId;
+      }
+    }
+    // Create minimal profile and link if missing or mismatched
+    const newId = await createAuPairProfileAndLink(uid, {
+      name: `${profileData.firstName} ${profileData.lastName}`.trim(),
+      age: profileData.age ? Number(profileData.age) : null,
+      nationality: profileData.nationality || "",
+      aboutMe: profileData.bio || "",
+    });
+    setProfileId(newId);
+    return newId;
+  }
+
+  async function saveStep(step: number) {
+    // Ensure profile doc exists and belongs to the current user (fix race with Storage rules)
+    const ensuredId = await ensureAuPairProfileExists(profileId);
+
+    if (step === 1) {
+      const { city, country } = parseCityCountry(profileData.currentLocation);
+      await patchAuPairProfile(ensuredId, {
+        name: `${profileData.firstName} ${profileData.lastName}`.trim(),
+        age: profileData.age ? Number(profileData.age) : null,
+        nationality: profileData.nationality || "",
+        currentLocation: { city, country },
+      });
+    }
+    if (step === 2) {
+      await patchAuPairProfile(ensuredId, {
+        aboutMe: profileData.bio || "",
+      });
+
+      if (profileData.photo || (profileData.galleryPhotos && profileData.galleryPhotos.length)) {
+        await saveAuPairPhotos(ensuredId, {
+          avatar: profileData.photo,
+          gallery: profileData.galleryPhotos,
+        });
+        // アップロード済みのローカル選択ファイルをクリア（プレビューは維持）
+        setProfileData((prev) => ({ ...prev, photo: null, galleryPhotos: [] }));
+      }
+    }
+    if (step === 3) {
+      await patchAuPairProfile(ensuredId, {
+        skills: profileData.skills.map((s) => ({
+          name: s,
+          emoji: "",
+          level: "beginner",
+        })),
+        languages: {
+          primary: { language: "English", proficiency: "basic" },
+          secondary: profileData.languages.map((l) => ({
+            language: l.language,
+            proficiency: mapLanguageLevel(l.level),
+          })),
+        },
+      });
+    }
+    if (step === 4) {
+      await patchAuPairProfile(ensuredId, {
+        experience: [
+          profileData.childcareExperience
+            ? {
+                type: "childcare",
+                description: profileData.childcareExperience,
+              }
+            : null,
+          profileData.previousExperience
+            ? { type: "other", description: profileData.previousExperience }
+            : null,
+        ].filter(Boolean),
+      });
+    }
+    if (step === 5) {
+      const desiredCountries = profileData.preferredLocations.map((loc) => {
+        const { country } = parseCityCountry(loc);
+        return { country, flag: "", cities: [] };
+      });
+      await patchAuPairProfile(ensuredId, {
+        availability: {
+          availableFrom: profileData.availableFrom || null,
+          duration: profileData.duration || null,
+          workingHoursType: "fulltime",
+          preferredDays: [],
+        },
+        desiredCountries,
+      });
+    }
+  }
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -87,13 +246,15 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
     if (files.length > 0) {
       const newPhotos = [...profileData.galleryPhotos, ...files].slice(0, 6); // Max 6 photos
       setProfileData({ ...profileData, galleryPhotos: newPhotos });
-      
+
       const newPreviews = [...galleryPreviews];
       files.forEach((file, index) => {
         if (galleryPreviews.length + index < 6) {
           const reader = new FileReader();
           reader.onloadend = () => {
-            setGalleryPreviews(prev => [...prev, reader.result as string].slice(0, 6));
+            setGalleryPreviews((prev) =>
+              [...prev, reader.result as string].slice(0, 6)
+            );
           };
           reader.readAsDataURL(file);
         }
@@ -148,10 +309,16 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
   };
 
   const addLocation = () => {
-    if (newLocation.trim() && !profileData.preferredLocations.includes(newLocation.trim())) {
+    if (
+      newLocation.trim() &&
+      !profileData.preferredLocations.includes(newLocation.trim())
+    ) {
       setProfileData({
         ...profileData,
-        preferredLocations: [...profileData.preferredLocations, newLocation.trim()],
+        preferredLocations: [
+          ...profileData.preferredLocations,
+          newLocation.trim(),
+        ],
       });
       setNewLocation("");
     }
@@ -160,14 +327,20 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
   const removeLocation = (location: string) => {
     setProfileData({
       ...profileData,
-      preferredLocations: profileData.preferredLocations.filter((l) => l !== location),
+      preferredLocations: profileData.preferredLocations.filter(
+        (l) => l !== location
+      ),
     });
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    // 保存（現在のステップのデータをFirestoreへ）
+    await saveStep(currentStep);
+
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     } else {
+      // 最終ステップ：完了
       onComplete();
     }
   };
@@ -214,7 +387,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                     </div>
                     <div>
                       <h2 className="text-gray-900">Basic Information</h2>
-                      <p className="text-gray-600 text-sm">Tell us about yourself</p>
+                      <p className="text-gray-600 text-sm">
+                        Tell us about yourself
+                      </p>
                     </div>
                   </div>
 
@@ -225,7 +400,10 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                         id="firstName"
                         value={profileData.firstName}
                         onChange={(e) =>
-                          setProfileData({ ...profileData, firstName: e.target.value })
+                          setProfileData({
+                            ...profileData,
+                            firstName: e.target.value,
+                          })
                         }
                         placeholder="Emma"
                       />
@@ -236,7 +414,10 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                         id="lastName"
                         value={profileData.lastName}
                         onChange={(e) =>
-                          setProfileData({ ...profileData, lastName: e.target.value })
+                          setProfileData({
+                            ...profileData,
+                            lastName: e.target.value,
+                          })
                         }
                         placeholder="Wilson"
                       />
@@ -262,7 +443,10 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                       id="nationality"
                       value={profileData.nationality}
                       onChange={(e) =>
-                        setProfileData({ ...profileData, nationality: e.target.value })
+                        setProfileData({
+                          ...profileData,
+                          nationality: e.target.value,
+                        })
                       }
                       placeholder="French"
                     />
@@ -276,7 +460,10 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                         id="currentLocation"
                         value={profileData.currentLocation}
                         onChange={(e) =>
-                          setProfileData({ ...profileData, currentLocation: e.target.value })
+                          setProfileData({
+                            ...profileData,
+                            currentLocation: e.target.value,
+                          })
                         }
                         className="pl-10"
                         placeholder="Paris, France"
@@ -294,7 +481,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                     </div>
                     <div>
                       <h2 className="text-gray-900">Photo & Introduction</h2>
-                      <p className="text-gray-600 text-sm">Make a great first impression</p>
+                      <p className="text-gray-600 text-sm">
+                        Make a great first impression
+                      </p>
                     </div>
                   </div>
 
@@ -314,7 +503,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                         ) : (
                           <div className="text-center">
                             <Upload className="w-8 h-8 text-orange-400 mx-auto mb-2" />
-                            <p className="text-xs text-gray-500">Click to upload</p>
+                            <p className="text-xs text-gray-500">
+                              Click to upload
+                            </p>
                           </div>
                         )}
                       </div>
@@ -340,7 +531,8 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                   <div className="space-y-2">
                     <Label>Additional Photos (up to 6)</Label>
                     <p className="text-sm text-gray-500">
-                      Add more photos to showcase your personality and experiences
+                      Add more photos to showcase your personality and
+                      experiences
                     </p>
                     <div className="grid grid-cols-3 gap-3">
                       {galleryPreviews.map((preview, index) => (
@@ -406,7 +598,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                     </div>
                     <div>
                       <h2 className="text-gray-900">Skills & Languages</h2>
-                      <p className="text-gray-600 text-sm">Showcase your abilities</p>
+                      <p className="text-gray-600 text-sm">
+                        Showcase your abilities
+                      </p>
                     </div>
                   </div>
 
@@ -416,7 +610,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                       <Input
                         value={newSkill}
                         onChange={(e) => setNewSkill(e.target.value)}
-                        onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addSkill())}
+                        onKeyPress={(e) =>
+                          e.key === "Enter" && (e.preventDefault(), addSkill())
+                        }
                         placeholder="e.g., Cooking, Swimming, Music"
                       />
                       <Button onClick={addSkill} variant="outline">
@@ -447,7 +643,10 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                       <Input
                         value={newLanguage.language}
                         onChange={(e) =>
-                          setNewLanguage({ ...newLanguage, language: e.target.value })
+                          setNewLanguage({
+                            ...newLanguage,
+                            language: e.target.value,
+                          })
                         }
                         placeholder="Language"
                         className="flex-1"
@@ -455,7 +654,10 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                       <select
                         value={newLanguage.level}
                         onChange={(e) =>
-                          setNewLanguage({ ...newLanguage, level: e.target.value })
+                          setNewLanguage({
+                            ...newLanguage,
+                            level: e.target.value,
+                          })
                         }
                         className="px-3 py-2 border rounded-md bg-white"
                       >
@@ -477,7 +679,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                           <div className="flex items-center gap-2">
                             <Languages className="w-4 h-4 text-orange-600" />
                             <span className="font-medium">{lang.language}</span>
-                            <span className="text-sm text-gray-600">• {lang.level}</span>
+                            <span className="text-sm text-gray-600">
+                              • {lang.level}
+                            </span>
                           </div>
                           <button
                             onClick={() => removeLanguage(index)}
@@ -500,7 +704,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                     </div>
                     <div>
                       <h2 className="text-gray-900">Experience</h2>
-                      <p className="text-gray-600 text-sm">Share your background</p>
+                      <p className="text-gray-600 text-sm">
+                        Share your background
+                      </p>
                     </div>
                   </div>
 
@@ -523,7 +729,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="previousExperience">Other Relevant Experience</Label>
+                    <Label htmlFor="previousExperience">
+                      Other Relevant Experience
+                    </Label>
                     <Textarea
                       id="previousExperience"
                       value={profileData.previousExperience}
@@ -548,7 +756,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                     </div>
                     <div>
                       <h2 className="text-gray-900">Your Preferences</h2>
-                      <p className="text-gray-600 text-sm">What are you looking for?</p>
+                      <p className="text-gray-600 text-sm">
+                        What are you looking for?
+                      </p>
                     </div>
                   </div>
 
@@ -560,7 +770,10 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                         type="date"
                         value={profileData.availableFrom}
                         onChange={(e) =>
-                          setProfileData({ ...profileData, availableFrom: e.target.value })
+                          setProfileData({
+                            ...profileData,
+                            availableFrom: e.target.value,
+                          })
                         }
                       />
                     </div>
@@ -570,7 +783,10 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                         id="duration"
                         value={profileData.duration}
                         onChange={(e) =>
-                          setProfileData({ ...profileData, duration: e.target.value })
+                          setProfileData({
+                            ...profileData,
+                            duration: e.target.value,
+                          })
                         }
                         className="w-full px-3 py-2 border rounded-md bg-white"
                       >
@@ -590,7 +806,8 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                         value={newLocation}
                         onChange={(e) => setNewLocation(e.target.value)}
                         onKeyPress={(e) =>
-                          e.key === "Enter" && (e.preventDefault(), addLocation())
+                          e.key === "Enter" &&
+                          (e.preventDefault(), addLocation())
                         }
                         placeholder="e.g., New York, Tokyo"
                       />
@@ -632,7 +849,8 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                 </Button>
                 <Button
                   onClick={handleNext}
-                  className="gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700"
+                  disabled={currentStep === 2 && !profileId}
+                  className="gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 disabled:opacity-60"
                 >
                   {currentStep === totalSteps ? "Complete Profile" : "Next"}
                   <ChevronRight className="w-4 h-4" />

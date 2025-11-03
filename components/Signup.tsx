@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { signUpEmail } from "@/lib/auth-actions";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
@@ -25,10 +26,14 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
     agreedToTerms: false
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.agreedToTerms) {
+    if (!formData.agreedToTerms) return;
+    try {
+      await signUpEmail(formData.email, formData.password, userType, formData.name);
       onSignupComplete?.(userType);
+    } catch (err: any) {
+      alert(err?.message || "Signup failed. Please try again.");
     }
   };
 
@@ -90,15 +95,15 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
             </div>
 
             {/* User Type Selection */}
-            <motion.div 
-              initial={{ opacity: 0, y: 8 }} 
-              animate={{ opacity: 1, y: 0 }} 
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
               className="mb-6"
             >
               <Label className="text-sm text-gray-700 mb-3 block">I am a...</Label>
-              <RadioGroup 
-                value={userType} 
+              <RadioGroup
+                value={userType}
                 onValueChange={(value) => setUserType(value as "family" | "aupair")}
                 className="grid grid-cols-2 gap-3"
               >
@@ -190,16 +195,16 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                 </div>
               </motion.div>
 
-              <motion.div 
-                initial={{ opacity: 0, y: 8 }} 
-                animate={{ opacity: 1, y: 0 }} 
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
                 className="flex items-start gap-2 pt-2"
               >
                 <Checkbox
                   id="terms"
                   checked={formData.agreedToTerms}
-                  onCheckedChange={(checked) => 
+                  onCheckedChange={(checked) =>
                     setFormData({ ...formData, agreedToTerms: checked as boolean })
                   }
                   className="mt-1"

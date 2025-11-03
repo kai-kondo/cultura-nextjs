@@ -5,17 +5,49 @@ import { useRouter } from 'next/navigation';
 import { Home } from '@/components/Home';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 
+// Firebase
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
+
 export default function HomePage() {
   const router = useRouter();
   const [userType, setUserType] = useState<'family' | 'aupair' | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const type = localStorage.getItem('userType') as 'family' | 'aupair' | null;
-    if (!type) {
-      router.push('/');
-      return;
-    }
-    setUserType(type);
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setUserType(null);
+        setLoading(false);
+        router.push('/'); // 未ログイン → ランディング/ログインへ
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (!snap.exists()) {
+          setUserType(null);
+          setLoading(false);
+          router.push('/profile-create'); // ユーザーDocなし → プロフィール作成へ
+          return;
+        }
+        const data = snap.data() as { userType?: 'family' | 'aupair'; profileRef?: string };
+        if (!data?.userType) {
+          setUserType(null);
+          setLoading(false);
+          router.push('/profile-create');
+          return;
+        }
+        setUserType(data.userType);
+      } catch (e) {
+        // 読み取りエラー時はログインに戻す（必要に応じてトースト等）
+        setUserType(null);
+        router.push('/');
+      } finally {
+        setLoading(false);
+      }
+    });
+    return () => unsub();
   }, [router]);
 
   const handleViewProfile = (id: string) => {
@@ -46,9 +78,8 @@ export default function HomePage() {
     }
   };
 
-  if (!userType) {
-    return null;
-  }
+  if (loading) return null; // TODO: Skeleton
+  if (!userType) return null; // リダイレクト中
 
   return (
     <div className="relative pb-16 lg:pb-0">
@@ -59,7 +90,7 @@ export default function HomePage() {
         onOpenMyProfile={handleOpenMyProfile}
         onOpenCommunity={handleOpenCommunity}
       />
-      <MobileBottomNav 
+      <MobileBottomNav
         activeScreen="home"
         onNavigate={handleMobileNavigation}
       />

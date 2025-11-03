@@ -1,4 +1,6 @@
-import { useState } from "react";
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -8,84 +10,158 @@ import { Card } from "./ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { CulturaLogo } from "./CulturaLogo";
-import { 
-  User, 
-  Globe, 
-  Camera, 
+import {
+  User,
+  Globe,
+  Camera,
   Save,
   Mail,
   MapPin,
   Calendar,
   Phone,
   X,
-  ArrowLeft
+  ArrowLeft,
 } from "lucide-react";
 import { motion } from "motion/react";
+import type { AuPairProfile, FamilyProfile, UserType } from "@/lib/types";
+import { auth, db, storage } from "@/lib/firebase";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
 interface ProfileEditProps {
-  userType: "family" | "aupair";
+  userType: UserType; // "family" | "aupair"
+  profileId: string;  // FirestoreのプロフィールID
   onBack?: () => void;
 }
 
-export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
+export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
   const [isSaving, setIsSaving] = useState(false);
-  
-  // Profile data state
-  const [profileData, setProfileData] = useState({
-    name: userType === "family" ? "The Johnson Family" : "Emma Johnson",
-    email: "emma.johnson@example.com",
-    phone: "+1 (555) 123-4567",
-    location: userType === "family" ? "San Francisco, CA" : "Paris, France",
-    birthDate: "1998-05-15",
-    bio: userType === "family" 
-      ? "We're a warm, active family looking for a caring au pair to join us in beautiful San Francisco!"
-      : "Passionate about childcare and cultural exchange. I love swimming, art, and teaching kids!",
-    languages: ["English", "French"],
-    skills: ["Swimming", "Art", "Cooking"],
-  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // UI状態
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phoneVal, setPhoneVal] = useState("");
+  const [locationVal, setLocationVal] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [bio, setBio] = useState("");
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [avatarURL, setAvatarURL] = useState<string | undefined>(undefined);
 
   const [newSkill, setNewSkill] = useState("");
   const [newLanguage, setNewLanguage] = useState("");
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    // Simulate save
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsSaving(false);
-  };
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const colName = useMemo(() => (userType === "aupair" ? "auPairProfiles" : "familyProfiles"), [userType]);
 
-  const addSkill = () => {
-    if (newSkill.trim() && !profileData.skills.includes(newSkill.trim())) {
-      setProfileData({
-        ...profileData,
-        skills: [...profileData.skills, newSkill.trim()]
-      });
-      setNewSkill("");
-    }
-  };
-
-  const removeSkill = (skill: string) => {
-    setProfileData({
-      ...profileData,
-      skills: profileData.skills.filter(s => s !== skill)
+  // Firestore購読（profile）
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    const unsub = onSnapshot(doc(db, colName, profileId), (snap) => {
+      const p = (snap.exists() ? (snap.data() as any) : null) as AuPairProfile | FamilyProfile | null;
+      if (!p) {
+        setLoading(false);
+        return;
+      }
+      setAvatarURL((p as any)?.profileImage);
+      setName(userType === "family" ? (p as any)?.familyName || "" : (p as any)?.name || "");
+      setBio((p as any)?.aboutMe || (p as any)?.aboutUs || "");
+      const city = (p as any)?.currentLocation?.city || (p as any)?.location?.city || "";
+      const country = (p as any)?.currentLocation?.country || (p as any)?.location?.country || "";
+      setLocationVal([city, country].filter(Boolean).join(", "));
+      setPhoneVal((p as any)?.phone || "");
+      setBirthDate((p as any)?.birthDate || "");
+      const primary = (p as any)?.languages?.primary?.language ? [(p as any).languages.primary.language] : [];
+      const secondary = ((p as any)?.languages?.secondary || []).map((l: any) => l.language);
+      setLanguages([...primary, ...secondary]);
+      const skillsArr = ((p as any)?.skills || []).map((s: any) => s.name || String(s));
+      setSkills(skillsArr);
+      // emailは認証ユーザーのものを優先
+      setEmail(auth.currentUser?.email || "");
+      setLoading(false);
+    }, (e) => {
+      setError(e.message);
+      setLoading(false);
     });
+    return () => unsub();
+  }, [colName, profileId, userType]);
+
+  // 追加・削除
+  const addSkill = () => {
+    const v = newSkill.trim();
+    if (v && !skills.includes(v)) setSkills([...skills, v]);
+    setNewSkill("");
   };
+  const removeSkill = (skill: string) => setSkills(skills.filter((s) => s !== skill));
 
   const addLanguage = () => {
-    if (newLanguage.trim() && !profileData.languages.includes(newLanguage.trim())) {
-      setProfileData({
-        ...profileData,
-        languages: [...profileData.languages, newLanguage.trim()]
-      });
-      setNewLanguage("");
+    const v = newLanguage.trim();
+    if (v && !languages.includes(v)) setLanguages([...languages, v]);
+    setNewLanguage("");
+  };
+  const removeLanguage = (lang: string) => setLanguages(languages.filter((l) => l !== lang));
+
+  // 画像アップロード
+  async function uploadImageAndGetURL(file: File, path: string) {
+    const objectRef = ref(storage, path);
+    const contentType = file.type && file.type.startsWith("image/") ? file.type : "image/jpeg";
+    const snap = await uploadBytes(objectRef, file, { contentType, cacheControl: "public, max-age=3600" });
+    return await getDownloadURL(snap.ref);
+  }
+  const handleAvatarClick = () => fileInputRef.current?.click();
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadImageAndGetURL(file, `${colName}/${profileId}/avatar.jpg`);
+      setAvatarURL(url);
+    } catch (e: any) {
+      setError(e?.message || "Upload failed");
     }
   };
 
-  const removeLanguage = (lang: string) => {
-    setProfileData({
-      ...profileData,
-      languages: profileData.languages.filter(l => l !== lang)
-    });
+  // 保存
+  const handleSave = async () => {
+    if (!auth.currentUser) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      const update: any = { updatedAt: new Date(), phone: phoneVal || null };
+
+      if (userType === "aupair") {
+        update.name = name || null;
+        update.aboutMe = bio || null;
+        if (locationVal) {
+          const [city, country] = locationVal.split(",").map((s) => s.trim());
+          update.currentLocation = { city: city || null, country: country || null };
+        }
+        update.birthDate = birthDate || null;
+        update.languages = {
+          primary: languages[0] ? { language: languages[0], proficiency: "fluent" } : null,
+          secondary: languages.slice(1).map((l) => ({ language: l, proficiency: "intermediate" })),
+        };
+        update.skills = skills.map((s) => ({ name: s }));
+      } else {
+        update.familyName = name || null;
+        update.aboutUs = bio || null;
+        if (locationVal) {
+          const [city, country] = locationVal.split(",").map((s) => s.trim());
+          update.location = { city: city || null, country: country || null };
+        }
+        // family側で必要に応じて languages/skills を追加してもOK
+      }
+
+      if (avatarURL) update.profileImage = avatarURL;
+
+      await updateDoc(doc(db, colName, profileId), update);
+    } catch (e: any) {
+      setError(e?.message || "Failed to save");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -113,7 +189,7 @@ export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
             <ArrowLeft className="w-4 h-4" />
             Back to Home
           </Button>
-          <button 
+          <button
             onClick={onBack}
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
@@ -135,42 +211,34 @@ export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
         </motion.div>
 
         {/* Main Content */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card className="p-6 bg-white/80 backdrop-blur">
             {/* Profile Photo */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6">
               <div className="relative group">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage 
-                    src={userType === "family" 
-                      ? "https://images.unsplash.com/photo-1511895426328-dc8714191300?w=300&h=300&fit=crop" 
+                  <AvatarImage src={avatarURL || (userType === "family"
+                      ? "https://images.unsplash.com/photo-1511895426328-dc8714191300?w=300&h=300&fit=crop"
                       : "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&h=300&fit=crop"
-                    } 
-                  />
-                  <AvatarFallback>{profileData.name.slice(0, 2)}</AvatarFallback>
+                  )} />
+                  <AvatarFallback>{(name || "").slice(0, 2) || "--"}</AvatarFallback>
                 </Avatar>
-                <Button 
-                  size="icon" 
-                  className="absolute bottom-0 right-0 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                >
+                <Button size="icon" className="absolute bottom-0 right-0 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={handleAvatarClick}>
                   <Camera className="w-4 h-4" />
                 </Button>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
               </div>
               <div className="flex-1">
                 <h3 className="text-gray-900 mb-1">Profile Photo</h3>
-                <p className="text-sm text-gray-600 mb-3">
-                  JPG, GIF or PNG. Max size of 5MB
-                </p>
+                <p className="text-sm text-gray-600 mb-3">JPG, GIF or PNG. Max size of 10MB</p>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={handleAvatarClick}>
                     <Camera className="w-4 h-4 mr-2" />
                     Upload
                   </Button>
-                  <Button variant="ghost" size="sm">Remove</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setAvatarURL(undefined)}>
+                    Remove
+                  </Button>
                 </div>
               </div>
             </div>
@@ -183,28 +251,18 @@ export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
                 <User className="w-5 h-5 text-blue-600" />
                 Basic Information
               </h3>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">{userType === "family" ? "Family Name" : "Full Name"}</Label>
-                  <Input
-                    id="name"
-                    value={profileData.name}
-                    onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                  />
+                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      id="email"
-                      type="email"
-                      className="pl-10"
-                      value={profileData.email}
-                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                    />
+                    <Input id="email" type="email" className="pl-10" value={email} onChange={(e) => setEmail(e.target.value)} />
                   </div>
                 </div>
 
@@ -212,13 +270,7 @@ export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
                   <Label htmlFor="phone">Phone Number</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      id="phone"
-                      type="tel"
-                      className="pl-10"
-                      value={profileData.phone}
-                      onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                    />
+                    <Input id="phone" type="tel" className="pl-10" value={phoneVal} onChange={(e) => setPhoneVal(e.target.value)} />
                   </div>
                 </div>
 
@@ -226,12 +278,7 @@ export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
                   <Label htmlFor="location">Location</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      id="location"
-                      className="pl-10"
-                      value={profileData.location}
-                      onChange={(e) => setProfileData({ ...profileData, location: e.target.value })}
-                    />
+                    <Input id="location" className="pl-10" value={locationVal} onChange={(e) => setLocationVal(e.target.value)} />
                   </div>
                 </div>
 
@@ -240,13 +287,7 @@ export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
                     <Label htmlFor="birthDate">Date of Birth</Label>
                     <div className="relative">
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <Input
-                        id="birthDate"
-                        type="date"
-                        className="pl-10"
-                        value={profileData.birthDate}
-                        onChange={(e) => setProfileData({ ...profileData, birthDate: e.target.value })}
-                      />
+                      <Input id="birthDate" type="date" className="pl-10" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
                     </div>
                   </div>
                 )}
@@ -254,14 +295,8 @@ export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="bio">{userType === "family" ? "About Us" : "About Me"}</Label>
-                <Textarea
-                  id="bio"
-                  rows={4}
-                  value={profileData.bio}
-                  onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                  placeholder="Tell us about yourself..."
-                />
-                <p className="text-xs text-gray-500">{profileData.bio.length} / 500 characters</p>
+                <Textarea id="bio" rows={4} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about yourself..." />
+                <p className="text-xs text-gray-500">{bio.length} / 500 characters</p>
               </div>
             </div>
 
@@ -274,25 +309,17 @@ export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
                 Languages
               </h3>
               <div className="flex flex-wrap gap-2 mb-3">
-                {profileData.languages.map((lang) => (
+                {languages.map((lang) => (
                   <Badge key={lang} variant="secondary" className="gap-1 pr-1">
                     {lang}
-                    <button
-                      onClick={() => removeLanguage(lang)}
-                      className="ml-1 hover:bg-gray-300 rounded-full p-0.5"
-                    >
+                    <button onClick={() => removeLanguage(lang)} className="ml-1 hover:bg-gray-300 rounded-full p-0.5">
                       <X className="w-3 h-3" />
                     </button>
                   </Badge>
                 ))}
               </div>
               <div className="flex gap-2">
-                <Input
-                  placeholder="Add a language..."
-                  value={newLanguage}
-                  onChange={(e) => setNewLanguage(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && addLanguage()}
-                />
+                <Input placeholder="Add a language..." value={newLanguage} onChange={(e) => setNewLanguage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addLanguage())} />
                 <Button onClick={addLanguage}>Add</Button>
               </div>
             </div>
@@ -303,36 +330,26 @@ export function ProfileEdit({ userType, onBack }: ProfileEditProps) {
             <div className="space-y-4">
               <h3 className="text-gray-900">Skills & Interests</h3>
               <div className="flex flex-wrap gap-2 mb-3">
-                {profileData.skills.map((skill) => (
+                {skills.map((skill) => (
                   <Badge key={skill} className="gap-1 pr-1 bg-gradient-to-r from-orange-500 to-rose-600">
                     {skill}
-                    <button
-                      onClick={() => removeSkill(skill)}
-                      className="ml-1 hover:bg-white/20 rounded-full p-0.5"
-                    >
+                    <button onClick={() => removeSkill(skill)} className="ml-1 hover:bg-white/20 rounded-full p-0.5">
                       <X className="w-3 h-3" />
                     </button>
                   </Badge>
                 ))}
               </div>
               <div className="flex gap-2">
-                <Input
-                  placeholder="Add a skill..."
-                  value={newSkill}
-                  onChange={(e) => setNewSkill(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && addSkill()}
-                />
+                <Input placeholder="Add a skill..." value={newSkill} onChange={(e) => setNewSkill(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSkill())} />
                 <Button onClick={addSkill}>Add</Button>
               </div>
             </div>
 
+            {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="outline" onClick={onBack}>Cancel</Button>
-              <Button 
-                onClick={handleSave} 
-                disabled={isSaving}
-                className="bg-gradient-to-r from-orange-500 to-rose-600"
-              >
+              <Button onClick={handleSave} disabled={isSaving} className="bg-gradient-to-r from-orange-500 to-rose-600">
                 <Save className="w-4 h-4 mr-2" />
                 {isSaving ? "Saving..." : "Save Changes"}
               </Button>

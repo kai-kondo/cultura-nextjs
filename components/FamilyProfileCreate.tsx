@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -22,6 +22,11 @@ import {
   Upload,
 } from "lucide-react";
 
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { createFamilyProfileAndLink, patchFamilyProfile, saveFamilyPhotos } from "@/lib/profile-actions";
+
 interface FamilyProfileCreateProps {
   onComplete: () => void;
 }
@@ -39,26 +44,28 @@ export function FamilyProfileCreate({ onComplete }: FamilyProfileCreateProps) {
   const [photoPreview, setPhotoPreview] = useState<string>("");
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
 
+  const [profileId, setProfileId] = useState<string | null>(null);
+
   const [profileData, setProfileData] = useState({
     // Step 1: Basic Info
     familyName: "",
     city: "",
     country: "",
     adults: "2",
-    
+
     // Step 2: Photo & Bio
     photo: null as File | null,
     galleryPhotos: [] as File[],
     familyBio: "",
-    
+
     // Step 3: Children
     children: [] as Child[],
-    
+
     // Step 4: Home & Requirements
     homeDescription: "",
     providedRoom: "",
     desiredSkills: [] as string[],
-    
+
     // Step 5: Offer & Preferences
     weeklyAllowance: "",
     startDate: "",
@@ -68,6 +75,90 @@ export function FamilyProfileCreate({ onComplete }: FamilyProfileCreateProps) {
 
   const [newSkill, setNewSkill] = useState("");
   const [newChild, setNewChild] = useState<Child>({ age: "", gender: "Any" });
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) return;
+      const us = await getDoc(doc(db, "users", u.uid));
+      const profileRef: string | undefined = us.exists() ? us.data().profileRef : undefined;
+      if (profileRef) {
+        const [, id] = profileRef.split("/");
+        setProfileId(id);
+      } else {
+        const id = await createFamilyProfileAndLink(u.uid, {
+          familyName: profileData.familyName || "",
+          location: { country: profileData.country || "", flag: "", city: profileData.city || "" },
+          familyMembers: { adults: Number(profileData.adults || "2"), children: [], pets: [] },
+          aboutUs: profileData.familyBio || "",
+        });
+        setProfileId(id);
+      }
+    });
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function toChildren(children: { age: string; gender: string }[]) {
+    return children
+      .filter((c) => c.age)
+      .map((c) => ({ age: Number(c.age), gender: c.gender === "Any" ? undefined : (c.gender.toLowerCase() as "boy"|"girl"), emoji: "👶" }));
+  }
+
+  async function saveStep(step: number) {
+    if (!profileId) return;
+    if (step === 1) {
+      await patchFamilyProfile(profileId, {
+        familyName: profileData.familyName || "",
+        location: { country: profileData.country || "", flag: "", city: profileData.city || "" },
+        familyMembers: { adults: Number(profileData.adults || "2"), children: [] },
+      });
+    }
+    if (step === 2) {
+      await patchFamilyProfile(profileId, {
+        aboutUs: profileData.familyBio || "",
+      });
+
+      if (profileData.photo || (profileData.galleryPhotos && profileData.galleryPhotos.length)) {
+        await saveFamilyPhotos(profileId, {
+          avatar: profileData.photo,
+          gallery: profileData.galleryPhotos,
+        });
+        // アップロード済みのローカルファイルをクリア（プレビューは維持）
+        setProfileData((prev) => ({ ...prev, photo: null, galleryPhotos: [] }));
+      }
+    }
+    if (step === 3) {
+      await patchFamilyProfile(profileId, {
+        familyMembers: { adults: Number(profileData.adults || "2"), children: toChildren(profileData.children) },
+      });
+    }
+    if (step === 4) {
+      await patchFamilyProfile(profileId, {
+        lookingFor: profileData.desiredSkills, // 設計書では qualitative 希望を lookingFor へ
+        offering: { accommodation: { type: "private_room", hasPrivateBathroom: false, description: profileData.providedRoom || "" }, meals: "some_meals" },
+        // homeDescription は説明的フィールドなので aboutUs に含めるか、別フィールドとして後で拡張
+      });
+    }
+    if (step === 5) {
+      await patchFamilyProfile(profileId, {
+        position: {
+          startDate: profileData.startDate || null,
+          duration: profileData.duration || null,
+          workingHoursType: "fulltime",
+          preferredDays: [],
+          hoursPerWeek: 20,
+        },
+        offering: {
+          accommodation: { type: "private_room", hasPrivateBathroom: false },
+          meals: "some_meals",
+          allowance: profileData.weeklyAllowance
+            ? { amount: Number(profileData.weeklyAllowance), currency: "USD", frequency: "weekly" }
+            : undefined,
+          benefits: profileData.additionalBenefits ? profileData.additionalBenefits.split(",").map((s) => s.trim()).filter(Boolean) : [],
+        },
+      });
+    }
+  }
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -90,7 +181,7 @@ export function FamilyProfileCreate({ onComplete }: FamilyProfileCreateProps) {
     if (files.length > 0) {
       const newPhotos = [...profileData.galleryPhotos, ...files].slice(0, 6); // Max 6 photos
       setProfileData({ ...profileData, galleryPhotos: newPhotos });
-      
+
       const newPreviews = [...galleryPreviews];
       files.forEach((file, index) => {
         if (galleryPreviews.length + index < 6) {
@@ -150,7 +241,8 @@ export function FamilyProfileCreate({ onComplete }: FamilyProfileCreateProps) {
     });
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    await saveStep(currentStep);
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     } else {

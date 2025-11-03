@@ -7,21 +7,64 @@ import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { CulturaLogo } from '@/components/CulturaLogo';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { db, auth } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function ProfileDetailPage() {
   const router = useRouter();
   const params = useParams();
   const profileId = params.id as string;
-  const [userType, setUserType] = useState<'family' | 'aupair' | null>(null);
+  const [resolvedType, setResolvedType] = useState<'family' | 'aupair' | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const type = localStorage.getItem('userType') as 'family' | 'aupair' | null;
-    if (!type) {
-      router.push('/');
-      return;
+    let cancelled = false;
+    async function resolveType() {
+      try {
+        // 1) Try auPairProfiles first
+        const ap = await getDoc(doc(db, 'auPairProfiles', profileId));
+        if (!cancelled && ap.exists()) {
+          setResolvedType('aupair');
+          setLoading(false);
+          return;
+        }
+        // 2) Fallback to familyProfiles
+        const fp = await getDoc(doc(db, 'familyProfiles', profileId));
+        if (!cancelled && fp.exists()) {
+          setResolvedType('family');
+          setLoading(false);
+          return;
+        }
+        // 3) As a last resort, if the viewer is logged in, use their userType + profileRef match
+        const uid = auth.currentUser?.uid;
+        if (uid) {
+          const u = await getDoc(doc(db, 'users', uid));
+          const data: any = u.exists() ? u.data() : null;
+          if (data?.profileRef) {
+            const ref: string = data.profileRef; // e.g., "auPairProfiles/xxxx"
+            const [col, id] = ref.split('/');
+            if (id === profileId) {
+              if (col === 'auPairProfiles') setResolvedType('aupair');
+              if (col === 'familyProfiles') setResolvedType('family');
+              setLoading(false);
+              return;
+            }
+          }
+        }
+        if (!cancelled) {
+          setResolvedType(null);
+          setLoading(false);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setResolvedType(null);
+          setLoading(false);
+        }
+      }
     }
-    setUserType(type);
-  }, [router]);
+    resolveType();
+    return () => { cancelled = true; };
+  }, [db, profileId]);
 
   const handleBack = () => {
     router.push('/home');
@@ -43,7 +86,10 @@ export default function ProfileDetailPage() {
     }
   };
 
-  if (!userType) {
+  if (loading) return null; // or a skeleton component if available
+  if (resolvedType === null) {
+    // Unknown profile id; navigate back to home
+    router.push('/home');
     return null;
   }
 
@@ -66,11 +112,11 @@ export default function ProfileDetailPage() {
           <ProfileLayout
             profileId={profileId}
             onMessageClick={handleMessageClick}
-            userType={userType}
+            userType={resolvedType}
           />
         </div>
-        
-        <MobileBottomNav 
+
+        <MobileBottomNav
           activeScreen="home"
           onNavigate={handleMobileNavigation}
         />
@@ -88,7 +134,7 @@ export default function ProfileDetailPage() {
               <ArrowLeft className="w-4 h-4" />
               Back to Home
             </Button>
-            <button 
+            <button
               onClick={() => router.push('/home')}
               className="flex items-center gap-2 hover:opacity-80 transition-opacity"
             >
@@ -103,7 +149,7 @@ export default function ProfileDetailPage() {
         <ProfileLayout
           profileId={profileId}
           onMessageClick={handleMessageClick}
-          userType={userType}
+          userType={resolvedType}
         />
       </div>
     </div>

@@ -1,4 +1,50 @@
 import { useState, useMemo, useEffect } from "react";
+import {
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+// Minimal card-facing types (derived from FIREBASE_DATA_STRUCTURE.md)
+interface AuPairCardData {
+  id: string;
+  name: string;
+  nationality?: string;
+  nationalityCode?: string;
+  flag?: string;
+  imageUrl?: string;
+  type?: "aupair" | "demipair" | "babysitter";
+  primaryLanguage?: { code: string; name: string; level?: string };
+  secondaryLanguages?: { code: string; name: string; level?: string }[];
+  skills?: { emoji?: string; name: string; code?: string }[];
+  duration?: string;
+  durationMonths?: number;
+  availability?: string;
+  workDays?: string[];
+  availableFrom?: string;
+}
+
+interface FamilyCardData {
+  id: string;
+  name: string;
+  location?: string;
+  nationalityCode?: string;
+  flag?: string;
+  imageUrl?: string;
+  primaryLanguage?: { code: string; name: string };
+  secondaryLanguages?: { code: string; name: string }[];
+  children?: { age?: number; emoji?: string }[];
+  lookingFor?: { name: string; code?: string }[];
+  lookingForType?: "aupair" | "demipair" | "babysitter";
+  duration?: string;
+  durationMonths?: number;
+  availability?: string;
+  needDays?: string[];
+  startDate?: string;
+}
 import { Button } from "./ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
@@ -91,329 +137,172 @@ export function Home({
   const [isSearchOpen, setIsSearchOpen] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
 
-  const auPairs = [
-    {
-      id: "emma",
-      name: "Emma Tanaka",
-      nationality: "Japan",
-      nationalityCode: "jp",
-      flag: "🇯🇵",
-      ethnicity: "asian",
-      type: "aupair",
-      desiredCountries: ["us", "au", "uk"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1704054006064-2c5b922e7a1e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMHdvbWFuJTIwcG9ydHJhaXR8ZW58MXx8fHwxNzYxNjcyOTM1fDA&ixlib=rb-4.1.0&q=80&w=1080",
-      primaryLanguage: { code: "japanese", name: "Japanese", level: "Native" },
-      secondaryLanguages: [
-        { code: "english", name: "English", level: "Intermediate" },
-        { code: "korean", name: "Korean", level: "Basic" },
-      ],
-      skills: [
-        { emoji: "🏊", name: "Swimming", code: "swimming" },
-        { emoji: "🍳", name: "Cooking", code: "cooking" },
-        { emoji: "🎨", name: "Art", code: "art" },
-      ],
-      duration: "6 months",
-      durationMonths: 6,
-      availability: "fulltime",
-      workDays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
-      availableFrom: "Dec 2025",
-    },
-    {
-      id: "lucas",
-      name: "Lucas Silva",
-      nationality: "Brazil",
-      nationalityCode: "br",
-      flag: "🇧🇷",
-      ethnicity: "latino",
-      type: "demipair",
-      desiredCountries: ["us", "ca", "uk"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1499996860823-5214fcc65f8f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMG1hbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc2MTc3MDYwMnww&ixlib=rb-4.1.0&q=80&w=1080",
-      primaryLanguage: {
-        code: "portuguese",
-        name: "Portuguese",
-        level: "Native",
-      },
-      secondaryLanguages: [
-        { code: "english", name: "English", level: "Fluent" },
-        { code: "spanish", name: "Spanish", level: "Intermediate" },
-      ],
-      skills: [
-        { emoji: "⚽", name: "Football", code: "sports" },
-        { emoji: "🎸", name: "Music", code: "music" },
-      ],
-      duration: "12 months",
-      durationMonths: 12,
-      availability: "parttime",
-      workDays: ["monday", "wednesday", "friday"],
-      availableFrom: "Feb 2026",
-    },
-    {
-      id: "sophie",
-      name: "Sophie Martin",
-      nationality: "France",
-      nationalityCode: "fr",
-      flag: "🇫🇷",
-      ethnicity: "caucasian",
-      type: "aupair",
-      desiredCountries: ["jp", "kr", "cn"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1664312572933-0563f14484a1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3b21hbiUyMHNtaWxpbmclMjBwb3J0cmFpdHxlbnwxfHx8fDE3NjE3MTI0MTJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
-      primaryLanguage: { code: "french", name: "French", level: "Native" },
-      secondaryLanguages: [
-        { code: "english", name: "English", level: "Fluent" },
-        { code: "japanese", name: "Japanese", level: "Basic" },
-      ],
-      skills: [
-        { emoji: "🎨", name: "Art", code: "art" },
-        { emoji: "📚", name: "Reading", code: "reading" },
-        { emoji: "🎭", name: "Theater", code: "theater" },
-      ],
-      duration: "9 months",
-      durationMonths: 9,
-      availability: "fulltime",
-      workDays: [
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-      ],
-      availableFrom: "Jan 2026",
-    },
-    {
-      id: "marco",
-      name: "Marco Rossi",
-      nationality: "Italy",
-      nationalityCode: "it",
-      flag: "🇮🇹",
-      ethnicity: "caucasian",
-      type: "babysitter",
-      desiredCountries: ["us", "uk", "au"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYW4lMjBwb3J0cmFpdCUyMGZyaWVuZGx5fGVufDF8fHx8MTc2MTY4MDQxMXww&ixlib=rb-4.1.0&q=80&w=1080",
-      primaryLanguage: { code: "italian", name: "Italian", level: "Native" },
-      secondaryLanguages: [
-        { code: "english", name: "English", level: "Fluent" },
-        { code: "spanish", name: "Spanish", level: "Intermediate" },
-      ],
-      skills: [
-        { emoji: "🍳", name: "Cooking", code: "cooking" },
-        { emoji: "⚽", name: "Soccer", code: "sports" },
-        { emoji: "🎵", name: "Music", code: "music" },
-      ],
-      duration: "8 months",
-      durationMonths: 8,
-      availability: "weekend",
-      workDays: ["saturday", "sunday"],
-      availableFrom: "Mar 2026",
-    },
-    {
-      id: "amara",
-      name: "Amara Johnson",
-      nationality: "USA",
-      nationalityCode: "us",
-      flag: "🇺🇸",
-      ethnicity: "african",
-      type: "aupair",
-      desiredCountries: ["jp", "fr", "es"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3b21hbiUyMHBvcnRyYWl0JTIwc21pbGV8ZW58MXx8fHwxNzYxNzc0OTIxfDA&ixlib=rb-4.1.0&q=80&w=1080",
-      primaryLanguage: { code: "english", name: "English", level: "Native" },
-      secondaryLanguages: [
-        { code: "spanish", name: "Spanish", level: "Intermediate" },
-        { code: "french", name: "French", level: "Basic" },
-      ],
-      skills: [
-        { emoji: "🎨", name: "Art", code: "art" },
-        { emoji: "🏊", name: "Swimming", code: "swimming" },
-        { emoji: "📖", name: "Teaching", code: "teaching" },
-      ],
-      duration: "12 months",
-      durationMonths: 12,
-      availability: "fulltime",
-      workDays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
-      availableFrom: "Jan 2026",
-    },
-    {
-      id: "maria",
-      name: "Maria Garcia",
-      nationality: "Mexico",
-      nationalityCode: "mx",
-      flag: "🇲🇽",
-      ethnicity: "latino",
-      type: "demipair",
-      desiredCountries: ["us", "ca", "es"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3b21hbiUyMHBvcnRyYWl0fGVufDF8fHx8MTc2MTc3NDkxOHww&ixlib=rb-4.1.0&q=80&w=1080",
-      primaryLanguage: { code: "spanish", name: "Spanish", level: "Native" },
-      secondaryLanguages: [
-        { code: "english", name: "English", level: "Fluent" },
-      ],
-      skills: [
-        { emoji: "🍳", name: "Cooking", code: "cooking" },
-        { emoji: "💃", name: "Dancing", code: "dancing" },
-        { emoji: "🎨", name: "Art", code: "art" },
-      ],
-      duration: "6 months",
-      durationMonths: 6,
-      availability: "parttime",
-      workDays: ["tuesday", "thursday", "saturday"],
-      availableFrom: "Feb 2026",
-    },
-  ];
+  const [auPairs, setAuPairs] = useState<AuPairCardData[]>([]);
 
-  const families = [
-    {
-      id: "miller",
-      name: "The Miller Family",
-      location: "San Francisco, CA",
-      nationalityCode: "us",
-      flag: "🇺🇸",
-      imageUrl:
-        "https://images.unsplash.com/photo-1624448445915-97154f5e688c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGZhbWlseSUyMHBvcnRyYWl0fGVufDF8fHx8MTc2MTc3NDg5OXww&ixlib=rb-4.1.0&q=80&w=1080",
-      primaryLanguage: { code: "english", name: "English" },
-      secondaryLanguages: [],
-      children: [
-        { age: 5, emoji: "👧" },
-        { age: 3, emoji: "👦" },
-      ],
-      lookingFor: [
-        { name: "Swimming", code: "swimming" },
-        { name: "Cooking", code: "cooking" },
-        { name: "English Teaching", code: "teaching" },
-      ],
-      lookingForType: "aupair" as const,
-      duration: "12 months",
-      durationMonths: 12,
-      availability: "fulltime",
-      needDays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
-      startDate: "Jan 2026",
-    },
-    {
-      id: "tanaka",
-      name: "The Tanaka Family",
-      location: "Tokyo, Japan",
-      nationalityCode: "jp",
-      flag: "🇯🇵",
-      imageUrl:
-        "https://images.unsplash.com/photo-1609220136736-443140cffec6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmYW1pbHklMjBob21lJTIwcG9ydHJhaXR8ZW58MXx8fHwxNzYxNzc0OTE4fDA&ixlib=rb-4.1.0&q=80&w=1080",
-      primaryLanguage: { code: "japanese", name: "Japanese" },
-      secondaryLanguages: [{ code: "english", name: "English" }],
-      children: [
-        { age: 7, emoji: "👧" },
-        { age: 4, emoji: "👧" },
-      ],
-      lookingFor: [
-        { name: "English Teaching", code: "teaching" },
-        { name: "Music", code: "music" },
-        { name: "Art", code: "art" },
-      ],
-      lookingForType: "demipair" as const,
-      duration: "6 months",
-      durationMonths: 6,
-      availability: "parttime",
-      needDays: ["monday", "wednesday", "friday"],
-      startDate: "Feb 2026",
-    },
-    {
-      id: "garcia",
-      name: "The Garcia Family",
-      location: "Barcelona, Spain",
-      nationalityCode: "es",
-      flag: "🇪🇸",
-      imageUrl:
-        "https://images.unsplash.com/photo-1511895426328-dc8714191300?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJlbnRzJTIwY2hpbGRyZW4lMjB0b2dldGhlcnxlbnwxfHx8fDE3NjE3NzQ5MjF8MA&ixlib=rb-4.1.0&q=80&w=1080",
-      primaryLanguage: { code: "spanish", name: "Spanish" },
-      secondaryLanguages: [{ code: "english", name: "English" }],
-      children: [{ age: 6, emoji: "👦" }],
-      lookingFor: [
-        { name: "Sports", code: "sports" },
-        { name: "Swimming", code: "swimming" },
-        { name: "Outdoor Activities", code: "outdoor" },
-      ],
-      lookingForType: "babysitter" as const,
-      duration: "10 months",
-      durationMonths: 10,
-      availability: "fulltime",
-      needDays: ["tuesday", "thursday", "saturday", "sunday"],
-      startDate: "Mar 2026",
-    },
-  ];
+  // Firestore → auPairProfiles (latest 24)
+  useEffect(() => {
+    const q = query(
+      collection(db, "auPairProfiles"),
+      orderBy("createdAt", "desc"),
+      limit(24)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const rows: AuPairCardData[] = snap.docs.map((d) => {
+        const p: any = d.data();
+        // Map Firestore fields → card-facing shape (best-effort based on spec)
+        const primaryLang = p?.languages?.primary?.language;
+        const secondary = (p?.languages?.secondary || []).map((l: any) => ({
+          code: String(l?.language || "").toLowerCase(),
+          name: l?.language || "",
+          level: l?.proficiency || "",
+        }));
+        return {
+          id: d.id,
+          name: p?.name || "",
+          nationality: p?.nationality || p?.originCountry || "",
+          nationalityCode:
+            (p?.nationalityCode || p?.originCountryCode || "").toLowerCase() ||
+            undefined,
+          flag: p?.flag || undefined,
+          imageUrl: p?.profileImage || p?.photos?.[0] || undefined,
+          type: p?.careType || p?.type || undefined,
+          primaryLanguage: primaryLang
+            ? {
+                code: String(primaryLang).toLowerCase(),
+                name: primaryLang,
+                level: p?.languages?.primary?.proficiency,
+              }
+            : undefined,
+          secondaryLanguages: secondary,
+          skills: (p?.skills || []).map((s: any) => ({
+            emoji: s?.emoji,
+            name: s?.name || String(s),
+            code: s?.code,
+          })),
+          duration: p?.durationLabel || undefined,
+          durationMonths: p?.durationMonths || undefined,
+          availability: p?.availability || undefined,
+          workDays: p?.workDays || p?.availabilityDays || [],
+          availableFrom:
+            p?.availability?.availableFrom || p?.availableFrom || undefined,
+        };
+      });
+      setAuPairs(rows);
+    });
+    return () => unsub();
+  }, []);
+
+  const [families, setFamilies] = useState<FamilyCardData[]>([]);
+
+  // Firestore → familyProfiles (latest 24)
+  useEffect(() => {
+    const q = query(
+      collection(db, "familyProfiles"),
+      orderBy("createdAt", "desc"),
+      limit(24)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const rows: FamilyCardData[] = snap.docs.map((d) => {
+        const p: any = d.data();
+        const city = p?.location?.city || p?.address?.city || "";
+        const country = p?.location?.country || p?.address?.country || "";
+        const primaryLang =
+          p?.languages?.primary?.language || p?.primaryLanguage;
+        const secondary = (
+          p?.languages?.secondary ||
+          p?.secondaryLanguages ||
+          []
+        ).map((l: any) => ({
+          code: String(l?.language || l)?.toLowerCase(),
+          name: l?.language || l,
+        }));
+        return {
+          id: d.id,
+          name: p?.familyName || p?.name || "",
+          location: [city, country].filter(Boolean).join(", ") || undefined,
+          nationalityCode:
+            (p?.nationalityCode || p?.countryCode || "").toLowerCase() ||
+            undefined,
+          flag: p?.flag || undefined,
+          imageUrl:
+            p?.familyPhoto || p?.profileImage || p?.photos?.[0] || undefined,
+          primaryLanguage: primaryLang
+            ? { code: String(primaryLang).toLowerCase(), name: primaryLang }
+            : undefined,
+          secondaryLanguages: secondary,
+          children: (p?.children || []).map((c: any) => ({
+            age: c?.age,
+            emoji: c?.emoji,
+          })),
+          lookingFor: (p?.lookingFor || p?.desiredSkills || []).map(
+            (s: any) => ({ name: s?.name || String(s), code: s?.code })
+          ),
+          lookingForType: p?.lookingForType || p?.careType || undefined,
+          duration: p?.durationLabel || undefined,
+          durationMonths: p?.durationMonths || undefined,
+          availability: p?.availability || undefined,
+          needDays: p?.needDays || p?.requiredDays || [],
+          startDate: p?.startDate || p?.availability?.startDate || undefined,
+        };
+      });
+      setFamilies(rows);
+    });
+    return () => unsub();
+  }, []);
 
   // Filter au pairs
   const filteredAuPairs = useMemo(() => {
     return auPairs.filter((auPair) => {
-      // Type filter
-      if (selectedType && auPair.type !== selectedType) return false;
-
-      // Nationality filter
-      if (selectedNationality && auPair.nationalityCode !== selectedNationality)
-        return false;
-
-      // Ethnicity filter
-      if (selectedEthnicity && auPair.ethnicity !== selectedEthnicity)
-        return false;
-
-      // Desired country filter
+      if (selectedType && (auPair.type || "") !== selectedType) return false;
       if (
-        selectedDesiredCountry &&
-        !auPair.desiredCountries.includes(selectedDesiredCountry)
+        selectedNationality &&
+        (auPair.nationalityCode || "") !== selectedNationality
       )
         return false;
-
-      // Primary language filter
-      if (
-        selectedPrimaryLanguage &&
-        auPair.primaryLanguage.code !== selectedPrimaryLanguage
-      )
-        return false;
-
-      // Secondary language filter
-      if (
-        selectedSecondaryLanguage &&
-        !auPair.secondaryLanguages.some(
-          (lang) => lang.code === selectedSecondaryLanguage
-        )
-      )
-        return false;
-
-      // Skill filter
-      if (
-        selectedSkill &&
-        !auPair.skills.some((skill) => skill.code === selectedSkill)
-      )
-        return false;
-
-      // Duration filter
+      if (selectedEthnicity) {
+        // ethnicity is not guaranteed in schema → skip unless present
+        const eth = (auPair as any)?.ethnicity;
+        if (!eth || eth !== selectedEthnicity) return false;
+      }
+      if (selectedDesiredCountry) {
+        const wants: string[] = (auPair as any)?.desiredCountries || [];
+        if (!wants.includes(selectedDesiredCountry)) return false;
+      }
+      if (selectedPrimaryLanguage) {
+        if ((auPair.primaryLanguage?.code || "") !== selectedPrimaryLanguage)
+          return false;
+      }
+      if (selectedSecondaryLanguage) {
+        const sec = (auPair.secondaryLanguages || []).some(
+          (l) => l.code === selectedSecondaryLanguage
+        );
+        if (!sec) return false;
+      }
+      if (selectedSkill) {
+        const has = (auPair.skills || []).some(
+          (s) => (s.code || s.name?.toLowerCase()) === selectedSkill
+        );
+        if (!has) return false;
+      }
       if (selectedDuration) {
         const [min, max] = selectedDuration.split("-").map(Number);
-        if (max) {
-          if (auPair.durationMonths < min || auPair.durationMonths > max)
-            return false;
-        } else {
-          // "12+" case
-          if (auPair.durationMonths < min) return false;
-        }
+        const m = auPair.durationMonths ?? 0;
+        if (max ? m < min || m > max : m < min) return false;
       }
-
-      // Availability filter
-      if (selectedAvailability && auPair.availability !== selectedAvailability)
+      if (
+        selectedAvailability &&
+        (auPair.availability || "") !== selectedAvailability
+      )
         return false;
-
-      // Days filter
       if (selectedDays.length > 0) {
-        const hasAllDays = selectedDays.every((day) =>
-          auPair.workDays.includes(day)
-        );
-        if (!hasAllDays) return false;
+        const days = auPair.workDays || [];
+        const hasAll = selectedDays.every((d) => days.includes(d));
+        if (!hasAll) return false;
       }
-
       return true;
     });
   }, [
+    auPairs,
     selectedType,
     selectedNationality,
     selectedEthnicity,
@@ -426,63 +315,49 @@ export function Home({
     selectedDays,
   ]);
 
-  // Filter families
   const filteredFamilies = useMemo(() => {
     return families.filter((family) => {
-      // Nationality filter
-      if (selectedNationality && family.nationalityCode !== selectedNationality)
+      if (
+        selectedNationality &&
+        (family.nationalityCode || "") !== selectedNationality
+      )
         return false;
-
-      // Primary language filter
       if (
         selectedPrimaryLanguage &&
-        family.primaryLanguage.code !== selectedPrimaryLanguage
+        (family.primaryLanguage?.code || "") !== selectedPrimaryLanguage
       )
         return false;
-
-      // Secondary language filter
-      if (
-        selectedSecondaryLanguage &&
-        !family.secondaryLanguages.some(
-          (lang) => lang.code === selectedSecondaryLanguage
-        )
-      )
-        return false;
-
-      // Skill filter
-      if (
-        selectedSkill &&
-        !family.lookingFor.some((skill) => skill.code === selectedSkill)
-      )
-        return false;
-
-      // Duration filter
+      if (selectedSecondaryLanguage) {
+        const sec = (family.secondaryLanguages || []).some(
+          (l) => l.code === selectedSecondaryLanguage
+        );
+        if (!sec) return false;
+      }
+      if (selectedSkill) {
+        const has = (family.lookingFor || []).some(
+          (s) => (s.code || s.name?.toLowerCase()) === selectedSkill
+        );
+        if (!has) return false;
+      }
       if (selectedDuration) {
         const [min, max] = selectedDuration.split("-").map(Number);
-        if (max) {
-          if (family.durationMonths < min || family.durationMonths > max)
-            return false;
-        } else {
-          // "12+" case
-          if (family.durationMonths < min) return false;
-        }
+        const m = family.durationMonths ?? 0;
+        if (max ? m < min || m > max : m < min) return false;
       }
-
-      // Availability filter
-      if (selectedAvailability && family.availability !== selectedAvailability)
+      if (
+        selectedAvailability &&
+        (family.availability || "") !== selectedAvailability
+      )
         return false;
-
-      // Days filter
       if (selectedDays.length > 0) {
-        const hasAllDays = selectedDays.every((day) =>
-          family.needDays.includes(day)
-        );
-        if (!hasAllDays) return false;
+        const days = family.needDays || [];
+        const hasAll = selectedDays.every((d) => days.includes(d));
+        if (!hasAll) return false;
       }
-
       return true;
     });
   }, [
+    families,
     selectedNationality,
     selectedPrimaryLanguage,
     selectedSecondaryLanguage,
@@ -1286,16 +1161,16 @@ export function Home({
             </motion.div>
 
             {isSearching ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8">
                 {[1, 2, 3, 4].map((i) => (
                   <motion.div
                     key={i}
-                    className="space-y-3"
+                    className="space-y-3 px-2 py-2"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.1 }}
                   >
-                    <Skeleton className="h-64 w-full rounded-xl" />
+                    <Skeleton className="h-72 w-full rounded-2xl" />
                     <Skeleton className="h-4 w-3/4" />
                     <Skeleton className="h-4 w-1/2" />
                   </motion.div>
@@ -1303,7 +1178,7 @@ export function Home({
               </div>
             ) : filteredAuPairs.length > 0 ? (
               <motion.div
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
@@ -1317,32 +1192,48 @@ export function Home({
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ delay: index * 0.05 }}
                       layout
+                      className="px-2 py-2"
                     >
                       <AuPairCard
                         name={auPair.name}
-                        country={auPair.nationality}
-                        flag={auPair.flag}
-                        imageUrl={auPair.imageUrl}
+                        country={auPair.nationality || ""}
+                        flag={auPair.flag || ""}
+                        imageUrl={auPair.imageUrl || ""}
                         type={
-                          ["aupair", "demipair", "babysitter"].includes(auPair.type)
-                            ? (auPair.type as "aupair" | "demipair" | "babysitter")
+                          auPair.type &&
+                          ["aupair", "demipair", "babysitter"].includes(
+                            auPair.type
+                          )
+                            ? (auPair.type as
+                                | "aupair"
+                                | "demipair"
+                                | "babysitter")
                             : undefined
                         }
                         languages={[
-                          auPair.primaryLanguage.name +
-                            " (" +
-                            auPair.primaryLanguage.level +
-                            ")",
-                          ...auPair.secondaryLanguages.map(
-                            (l) => l.name + " (" + l.level + ")"
+                          auPair.primaryLanguage
+                            ? `${auPair.primaryLanguage.name}${
+                                auPair.primaryLanguage.level
+                                  ? ` (${auPair.primaryLanguage.level})`
+                                  : ""
+                              }`
+                            : "",
+                          ...(auPair.secondaryLanguages || []).map(
+                            (l) => `${l.name}${l.level ? ` (${l.level})` : ""}`
                           ),
-                        ]}
-                        skills={auPair.skills.map((s) => ({
-                          emoji: s.emoji,
+                        ].filter(Boolean)}
+                        skills={(auPair.skills || []).map((s) => ({
+                          emoji: s.emoji || "",
                           name: s.name,
                         }))}
-                        duration={auPair.duration}
-                        availableFrom={auPair.availableFrom}
+                        duration={
+                          auPair.duration ||
+                          (auPair.durationMonths
+                            ? `${auPair.durationMonths} months`
+                            : "") ||
+                          ""
+                        }
+                        availableFrom={auPair.availableFrom || ""}
                         onViewProfile={() => onViewProfile?.(auPair.id)}
                       />
                     </motion.div>
@@ -1418,16 +1309,16 @@ export function Home({
             </motion.div>
 
             {isSearching ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8">
                 {[1, 2, 3, 4].map((i) => (
                   <motion.div
                     key={i}
-                    className="space-y-3"
+                    className="space-y-3 px-2 py-2"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.1 }}
                   >
-                    <Skeleton className="h-64 w-full rounded-xl" />
+                    <Skeleton className="h-72 w-full rounded-2xl" />
                     <Skeleton className="h-4 w-3/4" />
                     <Skeleton className="h-4 w-1/2" />
                   </motion.div>
@@ -1435,7 +1326,7 @@ export function Home({
               </div>
             ) : filteredFamilies.length > 0 ? (
               <motion.div
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
@@ -1449,20 +1340,35 @@ export function Home({
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ delay: index * 0.05 }}
                       layout
+                      className="px-2 py-2"
                     >
                       <FamilyCard
                         name={family.name}
-                        location={family.location}
-                        flag={family.flag}
-                        imageUrl={family.imageUrl}
+                        location={family.location || ""}
+                        flag={family.flag || ""}
+                        imageUrl={family.imageUrl || ""}
                         languages={[
-                          family.primaryLanguage.name,
-                          ...family.secondaryLanguages.map((l) => l.name),
-                        ]}
-                        children={family.children}
-                        lookingFor={family.lookingFor.map((s) => s.name)}
-                        duration={family.duration}
-                        startDate={family.startDate}
+                          family.primaryLanguage?.name || "",
+                          ...(family.secondaryLanguages || []).map(
+                            (l) => l.name
+                          ),
+                        ].filter(Boolean)}
+                        children={(family.children || []).filter(
+                          (c): c is { age: number; emoji: string } =>
+                            typeof c.age === "number" &&
+                            typeof c.emoji === "string"
+                        )}
+                        lookingFor={(family.lookingFor || []).map(
+                          (s) => s.name
+                        )}
+                        duration={
+                          family.duration ||
+                          (family.durationMonths
+                            ? `${family.durationMonths} months`
+                            : undefined) ||
+                          ""
+                        }
+                        startDate={family.startDate || ""}
                         lookingForType={family.lookingForType}
                         onViewProfile={() => onViewProfile?.(family.id)}
                       />

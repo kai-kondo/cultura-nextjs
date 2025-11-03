@@ -4,6 +4,10 @@ import { Separator } from "./ui/separator";
 import { Mail } from "lucide-react";
 import { motion } from "motion/react";
 import { CulturaLogo } from "./CulturaLogo";
+import { useState } from "react";
+import { signInEmail } from "@/lib/auth-actions";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 interface LoginProps {
   onLogin?: (type: "family" | "aupair") => void;
@@ -11,6 +15,41 @@ interface LoginProps {
 }
 
 export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleEmailLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const user = await signInEmail(email, password);
+      // Fetch userType from Firestore and route via onLogin
+      const snap = await getDoc(doc(db, "users", user.uid));
+      const userType =
+        (snap.exists() && (snap.data() as any).userType) || "aupair";
+      onLogin?.(userType);
+    } catch (err: any) {
+      let message = "Hmm, something went off. Wanna try again?👶";
+      if (err.code === "auth/invalid-email") {
+        message = "That email doesn’t look right 🤔";
+      } else if (err.code === "auth/user-not-found") {
+        message = "No account found with that email 🌱 — maybe sign up first?";
+      } else if (err.code === "auth/wrong-password") {
+        message =
+          "That password doesn’t match our vibes 😅 — give it another shot!";
+      } else if (err.code === "auth/too-many-requests") {
+        message = "Whoa, too many tries! Let’s chill for a bit ☕️";
+      }
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden bg-gradient-to-br from-orange-50 via-amber-50 to-rose-50">
       {/* Soft gradient blobs (background decoration) */}
@@ -56,7 +95,8 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
                 <CulturaLogo size={80} />
               </motion.div>
               <h1 className="text-3xl font-bold text-gray-800 tracking-tight mb-2">
-                Cultura <span className="text-gray-400 text-lg align-top">(Beta)</span>
+                Cultura{" "}
+                <span className="text-gray-400 text-lg align-top">(Beta)</span>
               </h1>
               <p className="text-gray-600 leading-relaxed">
                 Cultura is where people grow —
@@ -71,7 +111,11 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
 
             {/* Social Login */}
             <div className="space-y-3">
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+              >
                 <Button
                   variant="outline"
                   aria-label="Continue with Google"
@@ -96,22 +140,59 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  <span className="font-medium text-gray-700">Continue with Google</span>
+                  <span className="font-medium text-gray-700">
+                    Continue with Google
+                  </span>
                 </Button>
               </motion.div>
 
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
                 <Button
                   variant="outline"
                   aria-label="Continue with Email"
                   className="group relative w-full h-auto py-4 px-6 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm hover:shadow-md transition-all"
-                  onClick={() => onLogin?.("aupair")}
+                  onClick={() => setShowEmailForm((v) => !v)}
                 >
                   <Mail className="w-5 h-5 text-gray-600" />
-                  <span className="font-medium text-gray-700">Continue with Email</span>
+                  <span className="font-medium text-gray-700">
+                    Continue with Email
+                  </span>
                 </Button>
               </motion.div>
             </div>
+
+            {showEmailForm && (
+              <form onSubmit={handleEmailLogin} className="mt-4 space-y-3">
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email address"
+                  className="w-full rounded-lg border border-gray-300 bg-white/90 p-3 outline-none focus:ring-2 focus:ring-orange-400"
+                />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  className="w-full rounded-lg border border-gray-300 bg-white/90 p-3 outline-none focus:ring-2 focus:ring-orange-400"
+                />
+                {error && <p className="text-sm text-red-500">{error}</p>}
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-auto py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  {loading ? "Signing in..." : "Sign in"}
+                </Button>
+              </form>
+            )}
 
             <div className="relative my-6">
               <Separator />
@@ -121,7 +202,11 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
             </div>
 
             {/* Main CTA */}
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+            >
               <Button
                 className="w-full h-auto py-4 px-6 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-rose-500 hover:from-orange-600 hover:via-amber-600 hover:to-rose-600 text-white shadow-lg hover:shadow-xl transition-all"
                 onClick={() => onLogin?.("aupair")}
@@ -131,7 +216,8 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
             </motion.div>
 
             <p className="text-center text-xs text-gray-500 mt-4">
-              By continuing, you agree to our Terms of Service and Privacy Policy
+              By continuing, you agree to our Terms of Service and Privacy
+              Policy
             </p>
 
             {/* Switch to Signup */}
@@ -155,11 +241,19 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
       <footer className="relative z-10 bg-white/80 backdrop-blur-md border-t border-gray-200/70 py-4">
         <div className="max-w-4xl mx-auto px-4">
           <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
-            <button className="text-gray-600 hover:text-gray-900 transition-colors">About</button>
-            <button className="text-gray-600 hover:text-gray-900 transition-colors">FAQ</button>
-            <button className="text-gray-600 hover:text-gray-900 transition-colors">Contact</button>
+            <button className="text-gray-600 hover:text-gray-900 transition-colors">
+              About
+            </button>
+            <button className="text-gray-600 hover:text-gray-900 transition-colors">
+              FAQ
+            </button>
+            <button className="text-gray-600 hover:text-gray-900 transition-colors">
+              Contact
+            </button>
             <Separator orientation="vertical" className="h-4" />
-            <button className="text-gray-600 hover:text-gray-900 transition-colors">Language: EN / JP</button>
+            <button className="text-gray-600 hover:text-gray-900 transition-colors">
+              Language: EN / JP
+            </button>
           </div>
         </div>
       </footer>
