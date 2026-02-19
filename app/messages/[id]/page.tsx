@@ -8,8 +8,31 @@ import { CulturaLogo } from '@/components/CulturaLogo';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 
+type Participant = {
+  id: string;
+  name: string;
+  avatar: string;
+  subtitle: string;
+};
+
+type ThreadMessage = {
+  id: string;
+  fromId: string;
+  text: string;
+  createdAt: string;
+  read: boolean;
+};
+
+type Thread = {
+  id: string;
+  participants: [Participant, Participant];
+  lastMessageAt: string;
+  unread: number;
+  messages: ThreadMessage[];
+};
+
 // Mock data for current user
-const getCurrentUser = (userType: 'family' | 'aupair' | null) => {
+const getCurrentUser = (userType: 'family' | 'aupair' | null): Participant => {
   if (userType === 'family') {
     return {
       id: 'current-family',
@@ -27,8 +50,11 @@ const getCurrentUser = (userType: 'family' | 'aupair' | null) => {
 };
 
 // Mock data for threads
-const getThreadsWithProfile = (profileId: string, userType: 'family' | 'aupair' | null) => {
-  const profiles: any = {
+const getThreadsWithProfile = (
+  profileId: string,
+  userType: 'family' | 'aupair' | null
+): Thread[] => {
+  const profiles: Record<string, Participant> = {
     emma: {
       id: 'emma',
       name: 'Emma',
@@ -55,7 +81,7 @@ const getThreadsWithProfile = (profileId: string, userType: 'family' | 'aupair' 
   return [
     {
       id: `thread-${profileId}`,
-      participants: [me, other],
+      participants: [me, other] as [Participant, Participant],
       lastMessageAt: new Date().toISOString(),
       unread: 0,
       messages: [
@@ -111,7 +137,7 @@ export default function MessagesPage() {
   }
 
   const me = getCurrentUser(userType);
-  const threads = getThreadsWithProfile(profileId, userType);
+  const threads: Thread[] = getThreadsWithProfile(profileId, userType);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50 p-4 pb-20 lg:pb-4">
@@ -125,7 +151,7 @@ export default function MessagesPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to Home
           </Button>
-          <button 
+          <button
             onClick={() => router.push('/home')}
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
@@ -141,7 +167,7 @@ export default function MessagesPage() {
           onOpenProfile={handleOpenProfileFromMessage}
         />
       </div>
-      <MobileBottomNav 
+      <MobileBottomNav
         activeScreen="messages"
         onNavigate={handleMobileNavigation}
       />
