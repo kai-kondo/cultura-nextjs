@@ -53,14 +53,53 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
   const [newSkill, setNewSkill] = useState("");
   const [newLanguage, setNewLanguage] = useState("");
 
+  // Debug helper: confirm auth state at the moment of write/upload
+  const logAuth = (label: string) => {
+    console.log(`[ProfileEdit] ${label} auth:`, {
+      uid: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      userType,
+      colName,
+      profileDocId,
+    });
+  };
+
+  // --- autosave helpers ---
+  const hasLoadedRef = useRef(false);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleSave = (partial: Record<string, any>) => {
+    if (!hasLoadedRef.current) return; // avoid writing during initial load
+    if (!auth.currentUser) {
+      console.warn("[ProfileEdit] Autosave skipped: not authenticated");
+      return;
+    }
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        logAuth("Autosave");
+        const refDoc = doc(db, colName, profileDocId);
+        console.log("[ProfileEdit] Autosave writing to:", refDoc.path, partial);
+        await updateDoc(refDoc, partial);
+        console.log("[ProfileEdit] Autosave ok");
+      } catch (e: any) {
+        console.error("[ProfileEdit] Autosave failed:", e);
+        console.error("[ProfileEdit] Autosave code:", e?.code);
+        console.error("[ProfileEdit] Autosave message:", e?.message);
+        setError(e?.message || "Autosave failed");
+      }
+    }, 600); // debounce 600ms
+  };
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const colName = useMemo(() => (userType === "aupair" ? "auPairProfiles" : "familyProfiles"), [userType]);
+  // Safety: profileId must be a Firestore doc id (no slashes). If a path is passed, use the last segment.
+  const profileDocId = useMemo(() => String(profileId).split("/").pop() || profileId, [profileId]);
 
   // Firestore購読（profile）
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const unsub = onSnapshot(doc(db, colName, profileId), (snap) => {
+    const unsub = onSnapshot(doc(db, colName, profileDocId), (snap) => {
       const p = (snap.exists() ? (snap.data() as any) : null) as AuPairProfile | FamilyProfile | null;
       if (!p) {
         setLoading(false);
@@ -81,51 +120,143 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
       setSkills(skillsArr);
       // emailは認証ユーザーのものを優先
       setEmail(auth.currentUser?.email || "");
+      hasLoadedRef.current = true;
       setLoading(false);
     }, (e) => {
       setError(e.message);
       setLoading(false);
     });
     return () => unsub();
-  }, [colName, profileId, userType]);
+  }, [colName, profileDocId, userType]);
 
   // 追加・削除
   const addSkill = () => {
     const v = newSkill.trim();
-    if (v && !skills.includes(v)) setSkills([...skills, v]);
+    if (v && !skills.includes(v)) {
+      const next = [...skills, v];
+      setSkills(next);
+      scheduleSave({
+        skills: next.map((s) => ({ name: s })),
+        updatedAt: new Date(),
+      });
+    }
     setNewSkill("");
   };
-  const removeSkill = (skill: string) => setSkills(skills.filter((s) => s !== skill));
+  const removeSkill = (skill: string) => {
+    const next = skills.filter((s) => s !== skill);
+    setSkills(next);
+    scheduleSave({
+      skills: next.map((s) => ({ name: s })),
+      updatedAt: new Date(),
+    });
+  };
 
   const addLanguage = () => {
     const v = newLanguage.trim();
-    if (v && !languages.includes(v)) setLanguages([...languages, v]);
+    if (v && !languages.includes(v)) {
+      const next = [...languages, v];
+      setLanguages(next);
+      scheduleSave({
+        languages:
+          userType === "aupair"
+            ? {
+                primary: next[0] ? { language: next[0], proficiency: "fluent" } : null,
+                secondary: next.slice(1).map((l) => ({ language: l, proficiency: "intermediate" })),
+              }
+            : {
+                primary: next[0] ? { language: next[0] } : null,
+                secondary: next.slice(1).map((l) => ({ language: l })),
+              },
+        updatedAt: new Date(),
+      });
+    }
     setNewLanguage("");
   };
-  const removeLanguage = (lang: string) => setLanguages(languages.filter((l) => l !== lang));
+  const removeLanguage = (lang: string) => {
+    const next = languages.filter((l) => l !== lang);
+    setLanguages(next);
+    scheduleSave({
+      languages:
+        userType === "aupair"
+          ? {
+              primary: next[0] ? { language: next[0], proficiency: "fluent" } : null,
+              secondary: next.slice(1).map((l) => ({ language: l, proficiency: "intermediate" })),
+            }
+          : {
+              primary: next[0] ? { language: next[0] } : null,
+              secondary: next.slice(1).map((l) => ({ language: l })),
+            },
+      updatedAt: new Date(),
+    });
+  };
 
   // 画像アップロード
   async function uploadImageAndGetURL(file: File, path: string) {
     const objectRef = ref(storage, path);
     const contentType = file.type && file.type.startsWith("image/") ? file.type : "image/jpeg";
-    const snap = await uploadBytes(objectRef, file, { contentType, cacheControl: "public, max-age=3600" });
-    return await getDownloadURL(snap.ref);
+    try {
+      logAuth("Storage upload");
+      console.log("[ProfileEdit] Uploading avatar to:", objectRef.fullPath, { contentType, size: file.size });
+      const snap = await uploadBytes(objectRef, file, { contentType, cacheControl: "public, max-age=3600" });
+      const url = await getDownloadURL(snap.ref);
+      console.log("[ProfileEdit] Upload ok. downloadURL:", url);
+      return url;
+    } catch (e: any) {
+      console.error("[ProfileEdit] Upload failed:", e);
+      console.error("[ProfileEdit] Upload code:", e?.code);
+      console.error("[ProfileEdit] Upload message:", e?.message);
+      throw e;
+    }
   }
   const handleAvatarClick = () => fileInputRef.current?.click();
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const maxBytes = 10 * 1024 * 1024; // 10MB
+    if (file.size >= maxBytes) {
+      const msg = "Image too large. Please upload an image smaller than 10MB.";
+      window.alert(msg);
+      setError(msg);
+      // Allow selecting the same file again after the alert
+      e.currentTarget.value = "";
+      return;
+    }
     try {
-      const url = await uploadImageAndGetURL(file, `${colName}/${profileId}/avatar.jpg`);
+      if (!auth.currentUser) {
+        throw new Error("Not authenticated");
+      }
+      logAuth("Avatar change");
+      const url = await uploadImageAndGetURL(file, `${colName}/${profileDocId}/avatar.jpg`);
       setAvatarURL(url);
-    } catch (e: any) {
-      setError(e?.message || "Upload failed");
+      // persist immediately
+      try {
+        const refDoc = doc(db, colName, profileDocId);
+        console.log("[ProfileEdit] Persisting profileImage to:", refDoc.path);
+        await updateDoc(refDoc, { profileImage: url, updatedAt: new Date() });
+        console.log("[ProfileEdit] Persist ok");
+      } catch (e: any) {
+        console.error("[ProfileEdit] Persist failed:", e);
+        console.error("[ProfileEdit] Persist code:", e?.code);
+        console.error("[ProfileEdit] Persist message:", e?.message);
+        throw e;
+      }
+      e.currentTarget.value = "";
+    } catch (err: any) {
+      setError(err?.message || "Upload failed");
+      // clear file input safely using the original event
+      if (e?.currentTarget) {
+        e.currentTarget.value = "";
+      }
     }
   };
 
   // 保存
   const handleSave = async () => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      setError("Not authenticated");
+      console.warn("[ProfileEdit] Save blocked: not authenticated");
+      return;
+    }
     setIsSaving(true);
     setError(null);
     try {
@@ -156,7 +287,11 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
 
       if (avatarURL) update.profileImage = avatarURL;
 
-      await updateDoc(doc(db, colName, profileId), update);
+      logAuth("Save Changes");
+      const refDoc = doc(db, colName, profileDocId);
+      console.log("[ProfileEdit] Saving to:", refDoc.path, update);
+      await updateDoc(refDoc, update);
+      console.log("[ProfileEdit] Save ok");
     } catch (e: any) {
       setError(e?.message || "Failed to save");
     } finally {
@@ -255,14 +390,22 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">{userType === "family" ? "Family Name" : "Full Name"}</Label>
-                  <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setName(v);
+                      scheduleSave(userType === "family" ? { familyName: v || null, updatedAt: new Date() } : { name: v || null, updatedAt: new Date() });
+                    }}
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input id="email" type="email" className="pl-10" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    <Input id="email" type="email" className="pl-10" value={email} readOnly />
                   </div>
                 </div>
 
@@ -270,7 +413,17 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
                   <Label htmlFor="phone">Phone Number</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input id="phone" type="tel" className="pl-10" value={phoneVal} onChange={(e) => setPhoneVal(e.target.value)} />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      className="pl-10"
+                      value={phoneVal}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setPhoneVal(v);
+                        scheduleSave({ phone: v || null, updatedAt: new Date() });
+                      }}
+                    />
                   </div>
                 </div>
 
@@ -278,7 +431,21 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
                   <Label htmlFor="location">Location</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input id="location" className="pl-10" value={locationVal} onChange={(e) => setLocationVal(e.target.value)} />
+                    <Input
+                      id="location"
+                      className="pl-10"
+                      value={locationVal}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setLocationVal(v);
+                        const [city, country] = v.split(",").map((s) => s.trim());
+                        scheduleSave(
+                          userType === "family"
+                            ? { location: { city: city || null, country: country || null }, updatedAt: new Date() }
+                            : { currentLocation: { city: city || null, country: country || null }, updatedAt: new Date() }
+                        );
+                      }}
+                    />
                   </div>
                 </div>
 
@@ -287,7 +454,17 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
                     <Label htmlFor="birthDate">Date of Birth</Label>
                     <div className="relative">
                       <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <Input id="birthDate" type="date" className="pl-10" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+                      <Input
+                        id="birthDate"
+                        type="date"
+                        className="pl-10"
+                        value={birthDate}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setBirthDate(v);
+                          scheduleSave({ birthDate: v || null, updatedAt: new Date() });
+                        }}
+                      />
                     </div>
                   </div>
                 )}
@@ -295,7 +472,17 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="bio">{userType === "family" ? "About Us" : "About Me"}</Label>
-                <Textarea id="bio" rows={4} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about yourself..." />
+                <Textarea
+                  id="bio"
+                  rows={4}
+                  value={bio}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBio(v);
+                    scheduleSave(userType === "family" ? { aboutUs: v || null, updatedAt: new Date() } : { aboutMe: v || null, updatedAt: new Date() });
+                  }}
+                  placeholder="Tell us about yourself..."
+                />
                 <p className="text-xs text-gray-500">{bio.length} / 500 characters</p>
               </div>
             </div>

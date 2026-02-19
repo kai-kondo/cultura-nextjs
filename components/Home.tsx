@@ -5,7 +5,10 @@ import {
   query,
   orderBy,
   limit,
+  getDoc,
+  doc,
 } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 import { db } from "@/lib/firebase";
 
 // Minimal card-facing types (derived from FIREBASE_DATA_STRUCTURE.md)
@@ -139,6 +142,8 @@ export function Home({
 
   const [auPairs, setAuPairs] = useState<AuPairCardData[]>([]);
 
+  const [userPhoto, setUserPhoto] = useState<string | null>(null);
+
   // Firestore → auPairProfiles (latest 24)
   useEffect(() => {
     const q = query(
@@ -248,6 +253,45 @@ export function Home({
       setFamilies(rows);
     });
     return () => unsub();
+  }, []);
+
+  // Load current user's profile image for header avatar
+  useEffect(() => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    const load = async () => {
+      try {
+        const userSnap = await getDoc(doc(db, "users", currentUser.uid));
+        const userData = userSnap.data() as any;
+        if (!userData?.profileRef || !userData?.userType) return;
+
+        const profileCollection =
+          userData.userType === "aupair" ? "auPairProfiles" : "familyProfiles";
+
+        // `profileRef` can be stored either as a plain doc id ("abc123") or as a path
+        // ("auPairProfiles/abc123" or even "auPairProfiles/auPairProfiles/abc123").
+        // Firestore `doc(db, collection, id)` requires the id to NOT contain slashes.
+        const rawProfileRef = String(userData.profileRef || "");
+        const profileId = rawProfileRef.includes("/")
+          ? rawProfileRef.split("/").filter(Boolean).slice(-1)[0]
+          : rawProfileRef;
+
+        const profileSnap = await getDoc(doc(db, profileCollection, profileId));
+        const profile = profileSnap.data() as any;
+        const photo =
+          profile?.profileImage ||
+          profile?.familyPhoto ||
+          (Array.isArray(profile?.photos) ? profile.photos[0] : null);
+
+        if (photo) setUserPhoto(photo);
+      } catch (e) {
+        console.error("Failed to load user avatar:", e);
+      }
+    };
+
+    load();
   }, []);
 
   // Filter au pairs
@@ -650,6 +694,7 @@ export function Home({
               onOpenSettings={onOpenSettings}
               onOpenProfile={onOpenMyProfile}
               onOpenCommunity={onOpenCommunity}
+              avatarUrl={userPhoto || undefined}
             />
           </div>
         </div>

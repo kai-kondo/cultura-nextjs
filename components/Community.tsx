@@ -9,14 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Separator } from "./ui/separator";
 import { DesktopNav } from "./DesktopNav";
 import { CulturaLogo } from "./CulturaLogo";
-import { 
-  Heart, 
-  MessageCircle, 
-  Share2, 
-  Bookmark, 
+import {
+  Heart,
+  MessageCircle,
+  Bookmark,
   Send,
   Image as ImageIcon,
-  Video,
   Smile,
   TrendingUp,
   Users,
@@ -165,16 +163,16 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   const handleLike = (postId: string) => {
-    setPosts(posts.map(post => 
-      post.id === postId 
+    setPosts(posts.map(post =>
+      post.id === postId
         ? { ...post, isLiked: !post.isLiked, likes: post.isLiked ? post.likes - 1 : post.likes + 1 }
         : post
     ));
   };
 
   const handleBookmark = (postId: string) => {
-    setPosts(posts.map(post => 
-      post.id === postId 
+    setPosts(posts.map(post =>
+      post.id === postId
         ? { ...post, isBookmarked: !post.isBookmarked }
         : post
     ));
@@ -205,8 +203,8 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
     }
   };
 
-  const filteredPosts = activeCategory === "all" 
-    ? posts 
+  const filteredPosts = activeCategory === "all"
+    ? posts
     : posts.filter(post => post.category.toLowerCase() === activeCategory);
 
   return (
@@ -216,7 +214,7 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             {/* Logo */}
-            <button 
+            <button
               onClick={onNavigateHome}
               className="flex items-center gap-2 hover:opacity-80 transition-opacity"
             >
@@ -227,7 +225,7 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
             <div className="flex-1" />
 
             {/* Desktop Navigation */}
-            <DesktopNav 
+            <DesktopNav
               onOpenSettings={onOpenSettings}
               onOpenProfile={onOpenMyProfile}
             />
@@ -251,8 +249,8 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
                       key={category.id}
                       onClick={() => setActiveCategory(category.id)}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                        isActive 
-                          ? 'bg-blue-500 text-white' 
+                        isActive
+                          ? 'bg-blue-500 text-white'
                           : 'text-gray-700 hover:bg-gray-100'
                       }`}
                     >
@@ -292,8 +290,8 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
             <Card className="p-4 bg-white/60 backdrop-blur-sm">
               <div className="flex gap-3">
                 <Avatar className="w-10 h-10">
-                  <img 
-                    src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" 
+                  <img
+                    src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"
                     alt="Your avatar"
                     className="object-cover"
                   />
@@ -314,8 +312,8 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
                         <Avatar className="w-10 h-10">
-                          <img 
-                            src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" 
+                          <img
+                            src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"
                             alt="Your avatar"
                             className="object-cover"
                           />
@@ -337,15 +335,11 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
                           Photo
                         </Button>
                         <Button variant="outline" size="sm" className="gap-2">
-                          <Video className="w-4 h-4" />
-                          Video
-                        </Button>
-                        <Button variant="outline" size="sm" className="gap-2">
                           <Smile className="w-4 h-4" />
                           Feeling
                         </Button>
                       </div>
-                      <Button 
+                      <Button
                         className="w-full bg-gradient-to-r from-orange-500 to-rose-600"
                         onClick={handleCreatePost}
                         disabled={!newPostContent.trim()}
@@ -361,10 +355,6 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
                 <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-blue-500">
                   <ImageIcon className="w-5 h-5" />
                   <span className="hidden sm:inline">Photo</span>
-                </Button>
-                <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-green-500">
-                  <Video className="w-5 h-5" />
-                  <span className="hidden sm:inline">Video</span>
                 </Button>
                 <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-yellow-500">
                   <Smile className="w-5 h-5" />
@@ -389,8 +379,8 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex gap-3">
                           <Avatar className="w-12 h-12">
-                            <img 
-                              src={post.author.avatar} 
+                            <img
+                              src={post.author.avatar}
                               alt={post.author.name}
                               className="object-cover"
                             />
@@ -432,8 +422,8 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
                     {/* Post Image */}
                     {post.image && (
                       <div className="w-full">
-                        <img 
-                          src={post.image} 
+                        <img
+                          src={post.image}
                           alt="Post content"
                           className="w-full h-auto object-cover max-h-[500px]"
                         />
@@ -469,14 +459,6 @@ export function Community({ userType, onOpenSettings, onOpenMyProfile, onNavigat
                       >
                         <MessageCircle className="w-5 h-5" />
                         <span className="hidden sm:inline">Comment</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-2 text-gray-600 flex-1"
-                      >
-                        <Share2 className="w-5 h-5" />
-                        <span className="hidden sm:inline">Share</span>
                       </Button>
                       <Button
                         variant="ghost"

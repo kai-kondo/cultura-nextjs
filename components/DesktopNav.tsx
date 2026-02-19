@@ -15,9 +15,16 @@ interface DesktopNavProps {
   onOpenSettings?: () => void;
   onOpenProfile?: () => void;
   onOpenCommunity?: () => void;
+  avatarUrl?: string;
 }
 
-export function DesktopNav({ onLogout, onOpenSettings, onOpenProfile, onOpenCommunity }: DesktopNavProps) {
+export function DesktopNav({
+  onLogout,
+  onOpenSettings,
+  onOpenProfile,
+  onOpenCommunity,
+  avatarUrl,
+}: DesktopNavProps) {
   return (
     <nav className="hidden lg:flex items-center gap-4">
       {/* Community */}
@@ -41,7 +48,12 @@ export function DesktopNav({ onLogout, onOpenSettings, onOpenProfile, onOpenComm
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-10 w-10 rounded-full">
             <Avatar>
-              <AvatarImage src="https://images.unsplash.com/photo-1704054006064-2c5b922e7a1e?w=100" />
+              <AvatarImage
+                src={
+                  avatarUrl ||
+                  "https://images.unsplash.com/photo-1704054006064-2c5b922e7a1e?w=100"
+                }
+              />
               <AvatarFallback>ME</AvatarFallback>
             </Avatar>
           </Button>

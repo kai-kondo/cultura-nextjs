@@ -27,12 +27,43 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
     setLoading(true);
     try {
       const user = await signInEmail(email, password);
-      // Fetch userType from Firestore and route via onLogin
-      const snap = await getDoc(doc(db, "users", user.uid));
+
+      // --- Debug: Auth / Firestore connection & permissions ---
+      console.group("[Login] Firebase debug");
+      console.log("email:", email);
+      console.log("uid:", user?.uid);
+      console.log("env:", {
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID:
+          process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:
+          process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      });
+
+      const userRef = doc(db, "users", user.uid);
+      console.log("doc path:", userRef.path);
+
+      let snap;
+      try {
+        snap = await getDoc(userRef);
+        console.log("getDoc ok. exists:", snap.exists());
+        console.log("data:", snap.data());
+      } catch (fireErr: any) {
+        console.error("getDoc failed:", fireErr);
+        console.error("getDoc code:", fireErr?.code);
+        console.error("getDoc message:", fireErr?.message);
+        throw fireErr;
+      } finally {
+        console.groupEnd();
+      }
+      // --- Debug end ---
+
       const userType =
         (snap.exists() && (snap.data() as any).userType) || "aupair";
       onLogin?.(userType);
     } catch (err: any) {
+      console.error("[Login] error raw:", err);
+      console.error("[Login] code:", err?.code);
+      console.error("[Login] message:", err?.message);
       let message = "Hmm, something went off. Wanna try again?👶";
       if (err.code === "auth/invalid-email") {
         message = "That email doesn’t look right 🤔";

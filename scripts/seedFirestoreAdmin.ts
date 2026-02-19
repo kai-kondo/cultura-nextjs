@@ -1,28 +1,27 @@
-// scripts/seedFirestoreAdmin.ts
-import { initializeApp, cert, getApps } from "firebase-admin/app";
-import { getFirestore, FieldValue, BulkWriter } from "firebase-admin/firestore";
-import fs from "node:fs";
+import { initializeApp, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
-// ★鍵パス（環境変数でもOK）
-const SA_PATH =
-  process.env.GOOGLE_APPLICATION_CREDENTIALS || "secrets/cultura-sa.json";
-if (!fs.existsSync(SA_PATH)) {
-  console.error("Service Account JSON not found:", SA_PATH);
-  process.exit(1);
-}
+// Firebase Admin SDKの初期化
+const app = initializeApp({
+  credential: cert(require("../secrets/cultura-sa.json")),
+});
 
-const sa = JSON.parse(fs.readFileSync(SA_PATH, "utf8"));
-if (!getApps().length) {
-  initializeApp({ credential: cert(sa) });
-}
+const auth = getAuth();
 const db = getFirestore();
 
-// ダミー
-const auPairs = Array.from({ length: 10 }).map((_, i) => ({
+// ---- Unsplash fixed URLs (deterministic by index) ----
+const unsplashUrl = (i: number, type: "aupair" | "family") =>
+  type === "aupair"
+    ? `https://source.unsplash.com/600x600/?portrait,woman&amp;sig=${i + 1}`
+    : `https://source.unsplash.com/600x600/?family,home&amp;sig=${i + 1}`;
+
+// ---- Profile payload factories (with photo URLs) ----
+const makeAuPairProfile = (i: number) => ({
   name: `AuPair ${i + 1}`,
   nationality: ["Japan", "France", "Brazil", "Korea", "Australia"][i % 5],
   careType: i % 2 === 0 ? "aupair" : "demipair",
-  profileImage: `https://placehold.co/600x400?text=AuPair+${i + 1}`,
+  profileImage: unsplashUrl(i, "aupair"),
   languages: {
     primary: { language: "English", proficiency: "Fluent" },
     secondary: [{ language: "Japanese", proficiency: "Intermediate" }],
@@ -35,9 +34,9 @@ const auPairs = Array.from({ length: 10 }).map((_, i) => ({
   availability: "Immediate",
   availableFrom: "2026-01-01",
   createdAt: FieldValue.serverTimestamp(),
-}));
+});
 
-const families = Array.from({ length: 10 }).map((_, i) => ({
+const makeFamilyProfile = (i: number) => ({
   familyName: `Family ${i + 1}`,
   location: { city: "Tokyo", country: "Japan" },
   familyMembers: {
@@ -47,7 +46,7 @@ const families = Array.from({ length: 10 }).map((_, i) => ({
       { age: 3, emoji: "👧" },
     ],
   },
-  profileImage: `https://placehold.co/600x400?text=Family+${i + 1}`,
+  profileImage: unsplashUrl(i, "family"),
   lookingForType: i % 2 === 0 ? "aupair" : "demipair",
   languages: {
     primary: { language: "English" },
@@ -56,27 +55,68 @@ const families = Array.from({ length: 10 }).map((_, i) => ({
   durationMonths: [6, 9, 12][i % 3],
   availability: "Immediate",
   createdAt: FieldValue.serverTimestamp(),
-}));
+});
 
-async function seed() {
-  console.log("🔥 Seeding with Admin SDK...");
-  const writer: BulkWriter = db.bulkWriter();
+// テスト用ユーザーリスト（AuPair / Family 各10）
+const testUsers = [
+  ...Array.from({ length: 10 }).map((_, i) => ({
+    email: `aupair${i + 1}@example.com`,
+    password: "test1234",
+    displayName: `AuPair ${i + 1}`,
+    userType: "aupair",
+  })),
+  ...Array.from({ length: 10 }).map((_, i) => ({
+    email: `family${i + 1}@example.com`,
+    password: "test1234",
+    displayName: `Family ${i + 1}`,
+    userType: "family",
+  })),
+];
 
-  auPairs.forEach((p) => {
-    const ref = db.collection("auPairProfiles").doc(); // auto ID
-    writer.set(ref, p);
-  });
+async function seedAuth() {
+  console.log("🔥 Creating Authentication users + profiles (with Unsplash photos)...");
+  for (const [i, u] of testUsers.entries()) {
+    try {
+      const userRecord = await auth.createUser({
+        email: u.email,
+        password: u.password,
+        displayName: u.displayName,
+      });
 
-  families.forEach((f) => {
-    const ref = db.collection("familyProfiles").doc();
-    writer.set(ref, f);
-  });
+      // Create corresponding profile with fixed Unsplash URL
+      let profileId: string;
+      if (u.userType === "aupair") {
+        const ref = db.collection("auPairProfiles").doc();
+        await ref.set(makeAuPairProfile(i));
+        profileId = ref.id;
+      } else {
+        const ref = db.collection("familyProfiles").doc();
+        await ref.set(makeFamilyProfile(i));
+        profileId = ref.id;
+      }
 
-  await writer.close();
-  console.log("✅ Done: 10 auPairs + 10 families");
+      // Link user document to the created profile
+      await db.collection("users").doc(userRecord.uid).set({
+        email: u.email,
+        userType: u.userType,
+        profileRef: profileId,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      console.log(`✅ ${u.displayName} (${u.userType}) created → profileRef: ${profileId}`);
+    } catch (error: any) {
+      if (error.code === "auth/email-already-exists") {
+        console.log(`⚠️ ${u.email} はすでに存在します（スキップ）`);
+      } else {
+        console.error(`❌ ${u.email}:`, error);
+      }
+    }
+  }
+  console.log("🎉 Done seeding Auth + profiles!");
 }
 
-seed().catch((e) => {
+// ---- run ----
+seedAuth().catch((e) => {
   console.error(e);
   process.exit(1);
 });
