@@ -26,6 +26,7 @@ import { CulturaLogo } from '@/components/CulturaLogo';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 
+
 const PLACEHOLDER_AVATAR = '/placeholder-avatar.png';
 
 type UserType = 'family' | 'aupair' | null;
