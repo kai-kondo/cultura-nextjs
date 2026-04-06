@@ -7,7 +7,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Heart, MessageCircle, Share2, Flag, Star } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
-import { addDoc, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, serverTimestamp, query, limit } from "firebase/firestore";
 import AuPairProfile from "./AuPairProfile";
 import { FamilyProfile } from "./FamilyProfile";
 import type {
@@ -32,6 +32,44 @@ export function ProfileLayout({
   const [loading, setLoading] = useState(true);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
+
+  const [similarProfiles, setSimilarProfiles] = useState<any[]>([]);
+
+  function getSimilarTitle(item: any) {
+    if (isAuPair) {
+      const name = item?.name || "Au Pair";
+      const nationality = item?.nationality ? ` ${item.nationality}` : "";
+      return `${name}${nationality}`;
+    }
+
+    const name = item?.familyName || item?.name || "Family";
+    const country = item?.location?.country ? ` ${item.location.country}` : "";
+    return `${name}${country}`;
+  }
+
+  function getSimilarSubtitle(item: any) {
+    if (isAuPair) {
+      const primary = item?.languages?.primary?.language || item?.primaryLanguage?.name || "";
+      const secondary = Array.isArray(item?.languages?.secondary)
+        ? item.languages.secondary.map((lang: any) => lang?.language).filter(Boolean)
+        : Array.isArray(item?.secondaryLanguages)
+          ? item.secondaryLanguages.map((lang: any) => lang?.name).filter(Boolean)
+          : [];
+
+      return [primary, ...secondary].filter(Boolean).slice(0, 2).join(", ") || "View profile";
+    }
+
+    const city = item?.location?.city || "";
+    const childrenCount = Array.isArray(item?.familyMembers?.children)
+      ? item.familyMembers.children.length
+      : Array.isArray(item?.children)
+        ? item.children.length
+        : 0;
+
+    const locationLabel = city ? `${city}` : "Family profile";
+    const childLabel = childrenCount > 0 ? `${childrenCount} kid${childrenCount > 1 ? "s" : ""}` : "";
+    return [locationLabel, childLabel].filter(Boolean).join(" • ");
+  }
 
   // userType に応じて、正しいコレクションを購読
   useEffect(() => {
@@ -73,6 +111,26 @@ export function ProfileLayout({
 
     checkFavorite();
   }, [favoriteDocId]);
+
+  useEffect(() => {
+    if (!userType || !profileId) return;
+
+    const col = userType === "aupair" ? "auPairProfiles" : "familyProfiles";
+    const q = query(collection(db, col), limit(6));
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      const items = snapshot.docs
+        .map((snap) => ({ id: snap.id, ...(snap.data() as any) }))
+        .filter((item) => item.id !== profileId)
+        .filter((item) => item?.isDeleted !== true)
+        .filter((item) => !profileUserId || item.userId !== profileUserId)
+        .slice(0, 3);
+
+      setSimilarProfiles(items);
+    });
+
+    return () => unsub();
+  }, [profileId, profileUserId, userType]);
 
   const handleAddToFavorites = async () => {
     if (!profileUserId || !currentUserId || isMyProfile) return;
@@ -153,10 +211,6 @@ export function ProfileLayout({
                       <MessageCircle className="w-4 h-4 mr-2" />
                       Send Message
                     </Button>
-                    <Button variant="outline" className="w-full">
-                      <Share2 className="w-4 h-4 mr-2" />
-                      Share Profile
-                    </Button>
                     <Button
                       variant="outline"
                       className="w-full text-red-600 hover:text-red-700"
@@ -170,24 +224,35 @@ export function ProfileLayout({
               </>
             )}
 
-            {/* Similar Profiles（後でクエリ接続予定） */}
+            {/* Similar Profiles（Firestore-backed） */}
             <Card className="p-6">
               <h3 className="mb-4">
                 {isAuPair ? "Similar Au Pairs" : "Similar Families"}
               </h3>
               <div className="space-y-3">
-                {/* ここは後で Firestore クエリに差し替え */}
-                <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
-                  <div className="w-10 h-10 bg-gradient-to-br from-orange-300 to-rose-300 rounded-full" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">
-                      {isAuPair ? "Sophie 🇫🇷" : "Smith Family 🇬🇧"}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {isAuPair ? "French, English" : "London • 2 kids"}
-                    </p>
-                  </div>
-                </div>
+                {similarProfiles.length > 0 ? (
+                  similarProfiles.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-gray-50 cursor-pointer"
+                      onClick={() => {
+                        window.location.href = `/profile/${item.id}`;
+                      }}
+                    >
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-300 to-rose-300" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {getSimilarTitle(item)}
+                        </p>
+                        <p className="truncate text-xs text-gray-500">
+                          {getSimilarSubtitle(item)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No similar profiles yet.</p>
+                )}
               </div>
             </Card>
           </aside>

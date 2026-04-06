@@ -67,6 +67,7 @@ async function uploadImageAndGetURL(file: File, path: string): Promise<string> {
 
 export function AccountSettings({ userType, profileId, onClose, onLogout }: AccountSettingsProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -305,6 +306,61 @@ export function AccountSettings({ userType, profileId, onClose, onLogout }: Acco
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!auth.currentUser) return;
+  
+    setIsDeleting(true);
+    setError(null);
+  
+    try {
+      const uid = auth.currentUser.uid;
+  
+      await updateDoc(doc(db, "users", uid), {
+        isDeleted: true,
+        deletedAt: serverTimestamp(),
+        displayName: "Deleted user",
+        photoURL: "",
+        profileRef: null,
+        isProfileComplete: false,
+        updatedAt: serverTimestamp(),
+      });
+  
+      const profileUpdate: any = {
+        isDeleted: true,
+        deletedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        profileImage: "",
+        phone: null,
+      };
+  
+      if (userType === "aupair") {
+        profileUpdate.name = "Deleted user";
+        profileUpdate.aboutMe = null;
+        profileUpdate.currentLocation = null;
+        profileUpdate.birthDate = null;
+        profileUpdate.languages = {
+          primary: null,
+          secondary: [],
+        };
+        profileUpdate.skills = [];
+      } else {
+        profileUpdate.familyName = "Deleted user";
+        profileUpdate.aboutUs = null;
+        profileUpdate.location = null;
+      }
+  
+      await updateDoc(doc(db, colName, profileId), profileUpdate);
+  
+      await signOutUser();
+      onLogout?.();
+      onClose?.();
+    } catch (e: any) {
+      setError(e?.message || "Failed to delete account");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-rose-100">
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
@@ -332,266 +388,13 @@ export function AccountSettings({ userType, profileId, onClose, onLogout }: Acco
         {loading ? (
           <Card className="p-6 bg-white/80 backdrop-blur">Loading...</Card>
         ) : (
-          <Tabs defaultValue="profile" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
-              <TabsTrigger value="profile" className="gap-2">
-                <User className="w-4 h-4" />
-                <span className="hidden sm:inline">Profile</span>
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="gap-2">
-                <Bell className="w-4 h-4" />
-                <span className="hidden sm:inline">Settings</span>
-              </TabsTrigger>
+          <Tabs defaultValue="account" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-1 lg:w-auto lg:inline-grid">
               <TabsTrigger value="account" className="gap-2">
                 <Lock className="w-4 h-4" />
                 <span className="hidden sm:inline">Account</span>
               </TabsTrigger>
             </TabsList>
-
-            <TabsContent value="profile" className="space-y-6">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                <Card className="p-6 bg-white/80 backdrop-blur">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6">
-                    <div className="relative group">
-                      <Avatar className="h-24 w-24">
-                        <AvatarImage src={avatarURL || "/placeholder-avatar.png"} />
-                        <AvatarFallback>{name.slice(0, 2).toUpperCase() || "--"}</AvatarFallback>
-                      </Avatar>
-                      <Button
-                        size="icon"
-                        className="absolute bottom-0 right-0 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={handleAvatarClick}
-                      >
-                        <Camera className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-gray-900 mb-1">Profile Photo</h3>
-                      <p className="text-sm text-gray-600 mb-3">JPG, GIF or PNG. Max size of 10MB</p>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={handleAvatarClick}>
-                          <Camera className="w-4 h-4 mr-2" />
-                          Upload
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setAvatarURL(undefined)}>
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator className="my-6" />
-
-                  <div className="space-y-4">
-                    <h3 className="text-gray-900 flex items-center gap-2">
-                      <User className="w-5 h-5 text-blue-600" />
-                      Basic Information
-                    </h3>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="name">{userType === "family" ? "Family Name" : "Full Name"}</Label>
-                        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <Input id="email" type="email" className="pl-10" value={email} onChange={(e) => setEmail(e.target.value)} />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Phone Number</Label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <Input id="phone" type="tel" className="pl-10" value={phoneVal} onChange={(e) => setPhoneVal(e.target.value)} />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="location">Location</Label>
-                        <div className="relative">
-                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <Input id="location" className="pl-10" value={locationVal} onChange={(e) => setLocationVal(e.target.value)} />
-                        </div>
-                      </div>
-
-                      {userType === "aupair" && (
-                        <div className="space-y-2">
-                          <Label htmlFor="birthDate">Date of Birth</Label>
-                          <div className="relative">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <Input id="birthDate" type="date" className="pl-10" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="bio">About {userType === "family" ? "Us" : "Me"}</Label>
-                      <Textarea
-                        id="bio"
-                        rows={4}
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        placeholder="Tell us about yourself..."
-                      />
-                      <p className="text-xs text-gray-500">{bio.length} / 500 characters</p>
-                    </div>
-                  </div>
-
-                  <Separator className="my-6" />
-
-                  <div className="space-y-4">
-                    <h3 className="text-gray-900 flex items-center gap-2">
-                      <Globe className="w-5 h-5 text-blue-600" />
-                      Languages
-                    </h3>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {languages.map((lang) => (
-                        <Badge key={lang} variant="secondary" className="gap-1 pr-1">
-                          {lang}
-                          <button onClick={() => removeLanguage(lang)} className="ml-1 hover:bg-gray-300 rounded-full p-0.5">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Add a language..."
-                        value={newLanguage}
-                        onChange={(e) => setNewLanguage(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addLanguage())}
-                      />
-                      <Button onClick={addLanguage}>Add</Button>
-                    </div>
-                  </div>
-
-                  <Separator className="my-6" />
-
-                  <div className="space-y-4">
-                    <h3 className="text-gray-900">Skills & Interests</h3>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {skills.map((skill) => (
-                        <Badge key={skill} className="gap-1 pr-1 bg-gradient-to-r from-orange-500 to-rose-600">
-                          {skill}
-                          <button onClick={() => removeSkill(skill)} className="ml-1 hover:bg-white/20 rounded-full p-0.5">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Add a skill..."
-                        value={newSkill}
-                        onChange={(e) => setNewSkill(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSkill())}
-                      />
-                      <Button onClick={addSkill}>Add</Button>
-                    </div>
-                  </div>
-
-                  {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-                  <div className="flex justify-end gap-3 mt-6">
-                    <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSave} disabled={isSaving} className="bg-gradient-to-r from-orange-500 to-rose-600">
-                      <Save className="w-4 h-4 mr-2" />
-                      {isSaving ? "Saving..." : "Save Changes"}
-                    </Button>
-                  </div>
-                </Card>
-              </motion.div>
-            </TabsContent>
-
-            <TabsContent value="settings" className="space-y-6">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-4">
-                <Card className="p-6 bg-white/80 backdrop-blur">
-                  <h3 className="text-gray-900 mb-4 flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-blue-600" />
-                    Notification Preferences
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">New Messages</p>
-                        <p className="text-sm text-gray-600">Get notified when you receive new messages</p>
-                      </div>
-                      <Switch checked={notifications.newMessages} onCheckedChange={(checked) => setNotifications({ ...notifications, newMessages: checked })} />
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">New Matches</p>
-                        <p className="text-sm text-gray-600">Get notified about potential matches</p>
-                      </div>
-                      <Switch checked={notifications.matches} onCheckedChange={(checked) => setNotifications({ ...notifications, matches: checked })} />
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Profile Views</p>
-                        <p className="text-sm text-gray-600">Get notified when someone views your profile</p>
-                      </div>
-                      <Switch checked={notifications.profileViews} onCheckedChange={(checked) => setNotifications({ ...notifications, profileViews: checked })} />
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Newsletters</p>
-                        <p className="text-sm text-gray-600">Receive tips and updates via email</p>
-                      </div>
-                      <Switch checked={notifications.newsletters} onCheckedChange={(checked) => setNotifications({ ...notifications, newsletters: checked })} />
-                    </div>
-                  </div>
-                </Card>
-
-                <Card className="p-6 bg-white/80 backdrop-blur">
-                  <h3 className="text-gray-900 mb-4 flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-blue-600" />
-                    Privacy Settings
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Profile Visibility</p>
-                        <p className="text-sm text-gray-600">Make your profile visible in search results</p>
-                      </div>
-                      <Switch checked={privacy.profileVisible} onCheckedChange={(checked) => setPrivacy({ ...privacy, profileVisible: checked })} />
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Last Seen</p>
-                        <p className="text-sm text-gray-600">Show when you were last active</p>
-                      </div>
-                      <Switch checked={privacy.showLastSeen} onCheckedChange={(checked) => setPrivacy({ ...privacy, showLastSeen: checked })} />
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Read Receipts</p>
-                        <p className="text-sm text-gray-600">Let others know when you've read their messages</p>
-                      </div>
-                      <Switch checked={privacy.showReadReceipts} onCheckedChange={(checked) => setPrivacy({ ...privacy, showReadReceipts: checked })} />
-                    </div>
-                  </div>
-                </Card>
-
-                {error && <p className="text-sm text-red-600">{error}</p>}
-
-                <div className="flex justify-end">
-                  <Button onClick={handleSave} disabled={isSaving} className="bg-gradient-to-r from-orange-500 to-rose-600">
-                    <Save className="w-4 h-4 mr-2" />
-                    {isSaving ? "Saving..." : "Save Settings"}
-                  </Button>
-                </div>
-              </motion.div>
-            </TabsContent>
 
             <TabsContent value="account" className="space-y-6">
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-4">
@@ -667,13 +470,21 @@ export function AccountSettings({ userType, profileId, onClose, onLogout }: Acco
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction className="bg-red-600 hover:bg-red-700" disabled>
-                              Delete Account (Coming Soon)
+                            <AlertDialogAction
+                              className="bg-red-600 hover:bg-red-700"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                void handleDeleteAccount();
+                              }}
+                              disabled={isDeleting}
+                            >
+                              {isDeleting ? "Deleting..." : "Delete Account"}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
                     </div>
+                    {error ? <p className="text-sm text-red-600">{error}</p> : null}
                   </div>
                 </Card>
               </motion.div>

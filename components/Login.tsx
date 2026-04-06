@@ -5,7 +5,7 @@ import { Mail } from "lucide-react";
 import { motion } from "motion/react";
 import { CulturaLogo } from "./CulturaLogo";
 import { useState } from "react";
-import { signInEmail, signInGoogle } from "@/lib/auth-actions";
+import { signInEmail, signInGoogle, signOutUser } from "@/lib/auth-actions";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
@@ -57,6 +57,12 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
       }
       // --- Debug end ---
 
+      if (snap.exists() && (snap.data() as any).isDeleted === true) {
+        await signOutUser();
+        setError("This account has been deleted and can no longer be used.");
+        return;
+      }
+
       const userType =
         (snap.exists() && (snap.data() as any).userType) || "aupair";
       onLogin?.(userType);
@@ -87,6 +93,11 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
     try {
       const user = await signInGoogle("aupair");
       const snap = await getDoc(doc(db, "users", user.uid));
+      if (snap.exists() && (snap.data() as any).isDeleted === true) {
+        await signOutUser();
+        setError("This account has been deleted and can no longer be used.");
+        return;
+      }
       const userType =
         (snap.exists() && ((snap.data() as any).userType as "family" | "aupair")) ||
         "aupair";
@@ -225,6 +236,10 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
                 </Button>
               </motion.div>
             </div>
+
+            {error && !showEmailForm ? (
+              <p className="mt-4 text-sm text-center text-red-500">{error}</p>
+            ) : null}
 
             {showEmailForm && (
               <form onSubmit={handleEmailLogin} className="mt-4 space-y-3">

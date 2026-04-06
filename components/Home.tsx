@@ -139,6 +139,7 @@ export function Home({
 
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(true);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
 
   const [auPairs, setAuPairs] = useState<AuPairCardData[]>([]);
@@ -191,9 +192,11 @@ export function Home({
           workDays: p?.workDays || p?.availabilityDays || [],
           availableFrom:
             p?.availability?.availableFrom || p?.availableFrom || undefined,
+          isDeleted: p?.isDeleted === true,
         };
       });
-      setAuPairs(rows);
+      const filtered = rows.filter((r: any) => r?.isDeleted !== true);
+      setAuPairs(filtered);
     });
     return () => unsub();
   }, []);
@@ -249,9 +252,11 @@ export function Home({
           availability: p?.availability || undefined,
           needDays: p?.needDays || p?.requiredDays || [],
           startDate: p?.startDate || p?.availability?.startDate || undefined,
+          isDeleted: p?.isDeleted === true,
         };
       });
-      setFamilies(rows);
+      const filtered = rows.filter((r: any) => r?.isDeleted !== true);
+      setFamilies(filtered);
     });
     return () => unsub();
   }, []);
@@ -708,7 +713,7 @@ export function Home({
                           ? `${activeFilters.length} filter${
                               activeFilters.length !== 1 ? "s" : ""
                             } active`
-                          : "Find your perfect match"}
+                          : "Start with the most important filters first"}
                       </p>
                     </div>
                   </div>
@@ -802,283 +807,322 @@ export function Home({
                     </div>
                   </div>
 
-                  {/* Filter Selects - Enhanced Layout */}
-                  <div className="space-y-4" onKeyPress={handleKeyPress}>
-                    {/* First Row - Type, Ethnicity, Nationality */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {activeTab === "aupair" && (
-                        <Select
-                          value={selectedType}
-                          onValueChange={setSelectedType}
-                        >
-                          <SelectTrigger
-                            className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-                            aria-label="Select care type"
-                          >
-                            <SelectValue placeholder="👨‍👩‍👧‍👦 Care Type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="aupair">👨‍👩‍👧‍👦 Au Pair</SelectItem>
-                            <SelectItem value="demipair">
-                              🎓 Demi Pair
-                            </SelectItem>
-                            <SelectItem value="babysitter">
-                              👶 Babysitter
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-
-                      {activeTab === "aupair" && (
-                        <Select
-                          value={selectedEthnicity}
-                          onValueChange={setSelectedEthnicity}
-                        >
-                          <SelectTrigger
-                            className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-                            aria-label="Select ethnicity"
-                          >
-                            <SelectValue placeholder="🌍 Ethnicity" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="asian">🌏 Asian</SelectItem>
-                            <SelectItem value="caucasian">
-                              🌍 Caucasian
-                            </SelectItem>
-                            <SelectItem value="african">🌍 African</SelectItem>
-                            <SelectItem value="latino">
-                              🌎 Latino/Hispanic
-                            </SelectItem>
-                            <SelectItem value="mixed">🌐 Mixed</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-
-                      <Select
-                        value={selectedNationality}
-                        onValueChange={setSelectedNationality}
-                      >
-                        <SelectTrigger
-                          className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-                          aria-label="Select nationality"
-                        >
-                          <SelectValue placeholder="🏴 Nationality" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="jp">🇯🇵 Japan</SelectItem>
-                          <SelectItem value="us">🇺🇸 USA</SelectItem>
-                          <SelectItem value="br">🇧🇷 Brazil</SelectItem>
-                          <SelectItem value="fr">🇫🇷 France</SelectItem>
-                          <SelectItem value="it">🇮🇹 Italy</SelectItem>
-                          <SelectItem value="es">🇪🇸 Spain</SelectItem>
-                          <SelectItem value="uk">🇬🇧 UK</SelectItem>
-                          <SelectItem value="mx">🇲🇽 Mexico</SelectItem>
-                          <SelectItem value="au">🇦🇺 Australia</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Second Row - Desired Country, Primary & Secondary Language */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {activeTab === "aupair" && (
-                        <Select
-                          value={selectedDesiredCountry}
-                          onValueChange={setSelectedDesiredCountry}
-                        >
-                          <SelectTrigger
-                            className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-                            aria-label="Select desired country"
-                          >
-                            <SelectValue placeholder="🎯 Where to work?" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="us">🇺🇸 USA</SelectItem>
-                            <SelectItem value="jp">🇯🇵 Japan</SelectItem>
-                            <SelectItem value="au">🇦🇺 Australia</SelectItem>
-                            <SelectItem value="uk">🇬🇧 UK</SelectItem>
-                            <SelectItem value="fr">🇫🇷 France</SelectItem>
-                            <SelectItem value="es">🇪🇸 Spain</SelectItem>
-                            <SelectItem value="ca">🇨🇦 Canada</SelectItem>
-                            <SelectItem value="kr">🇰🇷 Korea</SelectItem>
-                            <SelectItem value="cn">🇨🇳 China</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-
-                      <Select
-                        value={selectedPrimaryLanguage}
-                        onValueChange={setSelectedPrimaryLanguage}
-                      >
-                        <SelectTrigger
-                          className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-                          aria-label="Select primary language"
-                        >
-                          <SelectValue placeholder="1️⃣ Primary Language" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="english">English</SelectItem>
-                          <SelectItem value="japanese">Japanese</SelectItem>
-                          <SelectItem value="french">French</SelectItem>
-                          <SelectItem value="spanish">Spanish</SelectItem>
-                          <SelectItem value="italian">Italian</SelectItem>
-                          <SelectItem value="portuguese">Portuguese</SelectItem>
-                          <SelectItem value="korean">Korean</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Select
-                        value={selectedSecondaryLanguage}
-                        onValueChange={setSelectedSecondaryLanguage}
-                      >
-                        <SelectTrigger
-                          className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-                          aria-label="Select secondary language"
-                        >
-                          <SelectValue placeholder="2️⃣ Secondary Language" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="english">English</SelectItem>
-                          <SelectItem value="japanese">Japanese</SelectItem>
-                          <SelectItem value="french">French</SelectItem>
-                          <SelectItem value="spanish">Spanish</SelectItem>
-                          <SelectItem value="italian">Italian</SelectItem>
-                          <SelectItem value="portuguese">Portuguese</SelectItem>
-                          <SelectItem value="korean">Korean</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Third Row - Duration, Availability, Skills */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <Select
-                        value={selectedDuration}
-                        onValueChange={setSelectedDuration}
-                      >
-                        <SelectTrigger
-                          className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-                          aria-label="Select duration"
-                        >
-                          <SelectValue placeholder="📅 Duration" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1-3">1-3 months</SelectItem>
-                          <SelectItem value="3-6">3-6 months</SelectItem>
-                          <SelectItem value="6-12">6-12 months</SelectItem>
-                          <SelectItem value="12">12+ months</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Select
-                        value={selectedAvailability}
-                        onValueChange={setSelectedAvailability}
-                      >
-                        <SelectTrigger
-                          className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-                          aria-label="Select availability"
-                        >
-                          <SelectValue placeholder="⏰ Availability" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="fulltime">
-                            ⏰ Full-time (5-7 days)
-                          </SelectItem>
-                          <SelectItem value="parttime">
-                            ⏰ Part-time (2-4 days)
-                          </SelectItem>
-                          <SelectItem value="weekend">
-                            ⏰ Weekends only
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Select
-                        value={selectedSkill}
-                        onValueChange={setSelectedSkill}
-                      >
-                        <SelectTrigger
-                          className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
-                          aria-label="Select skill"
-                        >
-                          <SelectValue placeholder="🎯 Skills" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="swimming">🏊 Swimming</SelectItem>
-                          <SelectItem value="art">🎨 Art</SelectItem>
-                          <SelectItem value="cooking">🍳 Cooking</SelectItem>
-                          <SelectItem value="music">🎵 Music</SelectItem>
-                          <SelectItem value="sports">⚽ Sports</SelectItem>
-                          <SelectItem value="teaching">📖 Teaching</SelectItem>
-                          <SelectItem value="dancing">💃 Dancing</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Fourth Row - Days Selection */}
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">
-                          📆 Preferred Days:
+                  {/* Filter Selects - Progressive Layout */}
+                  <div className="space-y-5" onKeyPress={handleKeyPress}>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">
+                            Start with the essentials
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            These filters usually matter most when finding a match.
+                          </p>
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          Results update automatically
                         </span>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          { id: "monday", label: "Mon", emoji: "📅" },
-                          { id: "tuesday", label: "Tue", emoji: "📅" },
-                          { id: "wednesday", label: "Wed", emoji: "📅" },
-                          { id: "thursday", label: "Thu", emoji: "📅" },
-                          { id: "friday", label: "Fri", emoji: "📅" },
-                          { id: "saturday", label: "Sat", emoji: "🎉" },
-                          { id: "sunday", label: "Sun", emoji: "🎉" },
-                        ].map((day) => {
-                          const isSelected = selectedDays.includes(day.id);
-                          return (
-                            <motion.div
-                              key={day.id}
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {activeTab === "aupair" && (
+                          <Select value={selectedType} onValueChange={setSelectedType}>
+                            <SelectTrigger
+                              className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                              aria-label="Select care type"
                             >
-                              <Badge
-                                variant={isSelected ? "default" : "outline"}
-                                className={`cursor-pointer transition-all whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-orange-400 ${
-                                  isSelected
-                                    ? "bg-gradient-to-r from-orange-500 to-rose-500 text-white hover:from-orange-600 hover:to-rose-600"
-                                    : "hover:bg-orange-50 hover:border-orange-300"
-                                }`}
-                                onClick={() => {
-                                  setSelectedDays((prev) =>
-                                    isSelected
-                                      ? prev.filter((d) => d !== day.id)
-                                      : [...prev, day.id]
-                                  );
-                                }}
-                                role="button"
-                                tabIndex={0}
-                                aria-pressed={isSelected}
-                                aria-label={`Select ${day.label}`}
-                              >
-                                {day.emoji} {day.label}
-                              </Badge>
-                            </motion.div>
-                          );
-                        })}
+                              <SelectValue placeholder="👨‍👩‍👧‍👦 Care Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="aupair">👨‍👩‍👧‍👦 Au Pair</SelectItem>
+                              <SelectItem value="demipair">🎓 Demi Pair</SelectItem>
+                              <SelectItem value="babysitter">👶 Babysitter</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+
+                        {activeTab === "aupair" ? (
+                          <Select
+                            value={selectedDesiredCountry}
+                            onValueChange={setSelectedDesiredCountry}
+                          >
+                            <SelectTrigger
+                              className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                              aria-label="Select desired country"
+                            >
+                              <SelectValue placeholder="🎯 Where to work?" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="us">🇺🇸 USA</SelectItem>
+                              <SelectItem value="jp">🇯🇵 Japan</SelectItem>
+                              <SelectItem value="au">🇦🇺 Australia</SelectItem>
+                              <SelectItem value="uk">🇬🇧 UK</SelectItem>
+                              <SelectItem value="fr">🇫🇷 France</SelectItem>
+                              <SelectItem value="es">🇪🇸 Spain</SelectItem>
+                              <SelectItem value="ca">🇨🇦 Canada</SelectItem>
+                              <SelectItem value="kr">🇰🇷 Korea</SelectItem>
+                              <SelectItem value="cn">🇨🇳 China</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Select
+                            value={selectedNationality}
+                            onValueChange={setSelectedNationality}
+                          >
+                            <SelectTrigger
+                              className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                              aria-label="Select nationality"
+                            >
+                              <SelectValue placeholder="🏴 Nationality" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="jp">🇯🇵 Japan</SelectItem>
+                              <SelectItem value="us">🇺🇸 USA</SelectItem>
+                              <SelectItem value="br">🇧🇷 Brazil</SelectItem>
+                              <SelectItem value="fr">🇫🇷 France</SelectItem>
+                              <SelectItem value="it">🇮🇹 Italy</SelectItem>
+                              <SelectItem value="es">🇪🇸 Spain</SelectItem>
+                              <SelectItem value="uk">🇬🇧 UK</SelectItem>
+                              <SelectItem value="mx">🇲🇽 Mexico</SelectItem>
+                              <SelectItem value="au">🇦🇺 Australia</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+
+                        <Select
+                          value={selectedPrimaryLanguage}
+                          onValueChange={setSelectedPrimaryLanguage}
+                        >
+                          <SelectTrigger
+                            className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                            aria-label="Select primary language"
+                          >
+                            <SelectValue placeholder="1️⃣ Primary Language" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="english">English</SelectItem>
+                            <SelectItem value="japanese">Japanese</SelectItem>
+                            <SelectItem value="french">French</SelectItem>
+                            <SelectItem value="spanish">Spanish</SelectItem>
+                            <SelectItem value="italian">Italian</SelectItem>
+                            <SelectItem value="portuguese">Portuguese</SelectItem>
+                            <SelectItem value="korean">Korean</SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        <Select
+                          value={selectedAvailability}
+                          onValueChange={setSelectedAvailability}
+                        >
+                          <SelectTrigger
+                            className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                            aria-label="Select availability"
+                          >
+                            <SelectValue placeholder="⏰ Availability" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fulltime">⏰ Full-time (5-7 days)</SelectItem>
+                            <SelectItem value="parttime">⏰ Part-time (2-4 days)</SelectItem>
+                            <SelectItem value="weekend">⏰ Weekends only</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
-                    {/* Fifth Row - Search Button */}
-                    <div className="flex justify-end">
-                      <Button
-                        className="bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 focus:ring-2 focus:ring-orange-400 w-full sm:w-auto px-8"
-                        onClick={handleSearch}
-                        aria-label="Search"
-                        aria-describedby="search-results-count"
-                        size="lg"
+                    <div className="rounded-2xl border border-orange-100 bg-orange-50/40 p-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowMoreFilters((prev) => !prev)}
+                        className="flex w-full items-center justify-between gap-3 text-left"
+                        aria-expanded={showMoreFilters}
+                        aria-controls="advanced-filters-panel"
                       >
-                        <Search className="w-5 h-5 mr-2" />
-                        Search Now
-                      </Button>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">More filters</p>
+                          <p className="text-xs text-gray-500">
+                            Refine by language, skills, duration, and more.
+                          </p>
+                        </div>
+                        <motion.div
+                          animate={{ rotate: showMoreFilters ? 180 : 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <ChevronDown className="w-5 h-5 text-gray-500" />
+                        </motion.div>
+                      </button>
+
+                      <AnimatePresence initial={false}>
+                        {showMoreFilters && (
+                          <motion.div
+                            id="advanced-filters-panel"
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-4 space-y-4 border-t border-orange-100 pt-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {activeTab === "aupair" && (
+                                  <Select
+                                    value={selectedEthnicity}
+                                    onValueChange={setSelectedEthnicity}
+                                  >
+                                    <SelectTrigger
+                                      className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                                      aria-label="Select ethnicity"
+                                    >
+                                      <SelectValue placeholder="🌍 Ethnicity" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="asian">🌏 Asian</SelectItem>
+                                      <SelectItem value="caucasian">🌍 Caucasian</SelectItem>
+                                      <SelectItem value="african">🌍 African</SelectItem>
+                                      <SelectItem value="latino">🌎 Latino/Hispanic</SelectItem>
+                                      <SelectItem value="mixed">🌐 Mixed</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )}
+
+                                {activeTab === "aupair" && (
+                                  <Select
+                                    value={selectedNationality}
+                                    onValueChange={setSelectedNationality}
+                                  >
+                                    <SelectTrigger
+                                      className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                                      aria-label="Select nationality"
+                                    >
+                                      <SelectValue placeholder="🏴 Nationality" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="jp">🇯🇵 Japan</SelectItem>
+                                      <SelectItem value="us">🇺🇸 USA</SelectItem>
+                                      <SelectItem value="br">🇧🇷 Brazil</SelectItem>
+                                      <SelectItem value="fr">🇫🇷 France</SelectItem>
+                                      <SelectItem value="it">🇮🇹 Italy</SelectItem>
+                                      <SelectItem value="es">🇪🇸 Spain</SelectItem>
+                                      <SelectItem value="uk">🇬🇧 UK</SelectItem>
+                                      <SelectItem value="mx">🇲🇽 Mexico</SelectItem>
+                                      <SelectItem value="au">🇦🇺 Australia</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )}
+
+                                <Select
+                                  value={selectedSecondaryLanguage}
+                                  onValueChange={setSelectedSecondaryLanguage}
+                                >
+                                  <SelectTrigger
+                                    className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                                    aria-label="Select secondary language"
+                                  >
+                                    <SelectValue placeholder="2️⃣ Secondary Language" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="english">English</SelectItem>
+                                    <SelectItem value="japanese">Japanese</SelectItem>
+                                    <SelectItem value="french">French</SelectItem>
+                                    <SelectItem value="spanish">Spanish</SelectItem>
+                                    <SelectItem value="italian">Italian</SelectItem>
+                                    <SelectItem value="portuguese">Portuguese</SelectItem>
+                                    <SelectItem value="korean">Korean</SelectItem>
+                                  </SelectContent>
+                                </Select>
+
+                                <Select
+                                  value={selectedDuration}
+                                  onValueChange={setSelectedDuration}
+                                >
+                                  <SelectTrigger
+                                    className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                                    aria-label="Select duration"
+                                  >
+                                    <SelectValue placeholder="📅 Duration" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="1-3">1-3 months</SelectItem>
+                                    <SelectItem value="3-6">3-6 months</SelectItem>
+                                    <SelectItem value="6-12">6-12 months</SelectItem>
+                                    <SelectItem value="12">12+ months</SelectItem>
+                                  </SelectContent>
+                                </Select>
+
+                                <Select
+                                  value={selectedSkill}
+                                  onValueChange={setSelectedSkill}
+                                >
+                                  <SelectTrigger
+                                    className="bg-white border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+                                    aria-label="Select skill"
+                                  >
+                                    <SelectValue placeholder="🎯 Skills" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="swimming">🏊 Swimming</SelectItem>
+                                    <SelectItem value="art">🎨 Art</SelectItem>
+                                    <SelectItem value="cooking">🍳 Cooking</SelectItem>
+                                    <SelectItem value="music">🎵 Music</SelectItem>
+                                    <SelectItem value="sports">⚽ Sports</SelectItem>
+                                    <SelectItem value="teaching">📖 Teaching</SelectItem>
+                                    <SelectItem value="dancing">💃 Dancing</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-gray-600">📆 Preferred Days:</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {[
+                                    { id: "monday", label: "Mon", emoji: "📅" },
+                                    { id: "tuesday", label: "Tue", emoji: "📅" },
+                                    { id: "wednesday", label: "Wed", emoji: "📅" },
+                                    { id: "thursday", label: "Thu", emoji: "📅" },
+                                    { id: "friday", label: "Fri", emoji: "📅" },
+                                    { id: "saturday", label: "Sat", emoji: "🎉" },
+                                    { id: "sunday", label: "Sun", emoji: "🎉" },
+                                  ].map((day) => {
+                                    const isSelected = selectedDays.includes(day.id);
+                                    return (
+                                      <motion.div
+                                        key={day.id}
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                      >
+                                        <Badge
+                                          variant={isSelected ? "default" : "outline"}
+                                          className={`cursor-pointer transition-all whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-orange-400 ${
+                                            isSelected
+                                              ? "bg-gradient-to-r from-orange-500 to-rose-500 text-white hover:from-orange-600 hover:to-rose-600"
+                                              : "hover:bg-orange-50 hover:border-orange-300"
+                                          }`}
+                                          onClick={() => {
+                                            setSelectedDays((prev) =>
+                                              isSelected
+                                                ? prev.filter((d) => d !== day.id)
+                                                : [...prev, day.id]
+                                            );
+                                          }}
+                                          role="button"
+                                          tabIndex={0}
+                                          aria-pressed={isSelected}
+                                          aria-label={`Select ${day.label}`}
+                                        >
+                                          {day.emoji} {day.label}
+                                        </Badge>
+                                      </motion.div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   </div>
-
                   {/* Active Filters Pills */}
                   <AnimatePresence>
                     {activeFilters.length > 0 && (
@@ -1186,16 +1230,16 @@ export function Home({
             </motion.div>
 
             {isSearching ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {[1, 2, 3, 4].map((i) => (
                   <motion.div
                     key={i}
-                    className="space-y-3 px-2 py-2"
+                    className="space-y-3 px-1 py-1 max-w-[320px] mx-auto w-full"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.1 }}
                   >
-                    <Skeleton className="h-72 w-full rounded-2xl" />
+                    <Skeleton className="h-56 w-full rounded-2xl" />
                     <Skeleton className="h-4 w-3/4" />
                     <Skeleton className="h-4 w-1/2" />
                   </motion.div>
@@ -1203,7 +1247,7 @@ export function Home({
               </div>
             ) : filteredAuPairs.length > 0 ? (
               <motion.div
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8"
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
@@ -1217,7 +1261,7 @@ export function Home({
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ delay: index * 0.05 }}
                       layout
-                      className="px-2 py-2"
+                      className="px-1 py-1 max-w-[320px] mx-auto w-full"
                     >
                       <AuPairCard
                         name={auPair.name}
@@ -1334,16 +1378,16 @@ export function Home({
             </motion.div>
 
             {isSearching ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {[1, 2, 3, 4].map((i) => (
                   <motion.div
                     key={i}
-                    className="space-y-3 px-2 py-2"
+                    className="space-y-3 px-1 py-1 max-w-[320px] mx-auto w-full"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.1 }}
                   >
-                    <Skeleton className="h-72 w-full rounded-2xl" />
+                    <Skeleton className="h-56 w-full rounded-2xl" />
                     <Skeleton className="h-4 w-3/4" />
                     <Skeleton className="h-4 w-1/2" />
                   </motion.div>
@@ -1351,7 +1395,7 @@ export function Home({
               </div>
             ) : filteredFamilies.length > 0 ? (
               <motion.div
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-8"
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
@@ -1365,7 +1409,7 @@ export function Home({
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ delay: index * 0.05 }}
                       layout
-                      className="px-2 py-2"
+                      className="px-1 py-1 max-w-[320px] mx-auto w-full"
                     >
                       <FamilyCard
                         name={family.name}

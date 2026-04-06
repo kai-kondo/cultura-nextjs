@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   addDoc,
@@ -46,6 +47,7 @@ import {
   BookOpen,
   Loader2,
   Send,
+  ArrowRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -91,6 +93,8 @@ interface FirestorePost {
   commentCount?: number;
   visibility?: string;
   status?: string;
+  deletedAt?: Timestamp | null;
+  deletedBy?: string | null;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
 }
@@ -105,6 +109,8 @@ interface FirestoreComment {
   content?: string;
   likeCount?: number;
   status?: string;
+  deletedAt?: Timestamp | null;
+  deletedBy?: string | null;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
 }
@@ -330,7 +336,8 @@ export function Community({ userType }: CommunityProps) {
             id: postDoc.id,
             data: postDoc.data() as FirestorePost,
           }))
-          .filter((post) => (post.data.status || "active") === "active");
+          .filter((post) => (post.data.status || "active") === "active")
+          .filter((post) => post.data.deletedAt == null);
 
         setPostDocs(nextPosts);
         setLoadingPosts(false);
@@ -409,8 +416,14 @@ export function Community({ userType }: CommunityProps) {
         commentsQuery,
         (snapshot) => {
           const nextComments = snapshot.docs
-            .map((commentDoc) => mapComment(commentDoc.id, commentDoc.data() as FirestoreComment))
-            .filter((comment) => comment.postId === postId);
+            .map((commentDoc) => ({
+              id: commentDoc.id,
+              data: commentDoc.data() as FirestoreComment,
+            }))
+            .filter((comment) => comment.data.postId === postId)
+            .filter((comment) => (comment.data.status || "active") === "active")
+            .filter((comment) => comment.data.deletedAt == null)
+            .map((comment) => mapComment(comment.id, comment.data));
 
           setCommentsByPostId((prev) => ({
             ...prev,
@@ -506,7 +519,15 @@ export function Community({ userType }: CommunityProps) {
     setError(null);
 
     try {
-      await deleteDoc(doc(db, "posts", postId));
+      await updateDoc(doc(db, "posts", postId), {
+        status: "deleted",
+        deletedAt: serverTimestamp(),
+        deletedBy: firebaseUser.uid,
+        content: "",
+        imageUrls: [],
+        tags: [],
+        updatedAt: serverTimestamp(),
+      });
 
       setOpenCommentPostIds((prev) => {
         const next = new Set(prev);
@@ -583,6 +604,10 @@ export function Community({ userType }: CommunityProps) {
 
     try {
       const author = await resolveCurrentAuthor(firebaseUser, userType);
+      if (!author.authorName || author.authorName === "Deleted user") {
+        setError("Deleted accounts cannot create comments.");
+        return;
+      }
 
       await addDoc(collection(db, "comments"), {
         postId,
@@ -646,6 +671,10 @@ export function Community({ userType }: CommunityProps) {
   
     try {
       const author = await resolveCurrentAuthor(firebaseUser, userType);
+      if (!author.authorName || author.authorName === "Deleted user") {
+        setError("Deleted accounts cannot create posts.");
+        return;
+      }
       let uploadedImageUrls: string[] = [];
   
       if (newPostImage) {
@@ -1100,22 +1129,43 @@ export function Community({ userType }: CommunityProps) {
           </Card>
 
             <Card className="p-4 bg-white/60 backdrop-blur-sm">
-              <h3 className="text-gray-700 mb-4">Popular Resources</h3>
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h3 className="text-gray-700">Handbook</h3>
+                <Link
+                  href="/handbook"
+                  className="inline-flex items-center gap-1 text-xs text-orange-600 transition-colors hover:text-orange-700"
+                >
+                  View all
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+
               <div className="space-y-3">
-                <button className="w-full text-left p-3 bg-gradient-to-r from-orange-50 to-rose-50 rounded-lg hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-2 mb-1">
-                    <BookOpen className="w-4 h-4 text-orange-500" />
+                <Link
+                  href="/handbook/au-pair"
+                  className="block rounded-lg bg-gradient-to-r from-orange-50 to-rose-50 p-3 transition-shadow hover:shadow-md"
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-orange-500" />
                     <span className="text-sm text-gray-700">Au Pair Handbook</span>
                   </div>
-                  <p className="text-xs text-gray-600">Essential guide for newcomers</p>
-                </button>
-                <button className="w-full text-left p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Users className="w-4 h-4 text-green-500" />
-                    <span className="text-sm text-gray-700">Host Family Tips</span>
+                  <p className="text-xs text-gray-600">
+                    Guidance for getting started, communication, and daily life with a host family.
+                  </p>
+                </Link>
+
+                <Link
+                  href="/handbook/host-family"
+                  className="block rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 p-3 transition-shadow hover:shadow-md"
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    <Users className="h-4 w-4 text-green-500" />
+                    <span className="text-sm text-gray-700">Host Family Handbook</span>
                   </div>
-                  <p className="text-xs text-gray-600">Making the most of your experience</p>
-                </button>
+                  <p className="text-xs text-gray-600">
+                    Tips for preparing, welcoming, and supporting your au pair with confidence.
+                  </p>
+                </Link>
               </div>
             </Card>
           </aside>

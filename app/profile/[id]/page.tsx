@@ -23,14 +23,14 @@ export default function ProfileDetailPage() {
       try {
         // 1) Try auPairProfiles first
         const ap = await getDoc(doc(db, 'auPairProfiles', profileId));
-        if (!cancelled && ap.exists()) {
+        if (!cancelled && ap.exists() && ap.data()?.isDeleted !== true) {
           setResolvedType('aupair');
           setLoading(false);
           return;
         }
         // 2) Fallback to familyProfiles
         const fp = await getDoc(doc(db, 'familyProfiles', profileId));
-        if (!cancelled && fp.exists()) {
+        if (!cancelled && fp.exists() && fp.data()?.isDeleted !== true) {
           setResolvedType('family');
           setLoading(false);
           return;
@@ -88,9 +88,21 @@ export default function ProfileDetailPage() {
 
   if (loading) return null; // or a skeleton component if available
   if (resolvedType === null) {
-    // Unknown profile id; navigate back to home
-    router.push('/home');
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-rose-50">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            This account is no longer available
+          </h2>
+          <p className="text-gray-500 mb-4">
+            The profile may have been deleted.
+          </p>
+          <Button onClick={() => router.push('/home')}>
+            Back to Home
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

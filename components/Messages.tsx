@@ -55,6 +55,34 @@ export type MessagesProps = {
   onSelectConversation?: (routeId: string) => void;
 };
 
+function isDeletedParticipant(participant: MessageParticipant | null | undefined) {
+  if (!participant) return false;
+  const normalized = (participant.name || "").trim().toLowerCase();
+  return normalized === "deleted user" || normalized === "デリートユーザー";
+}
+
+function getParticipantDisplayName(participant: MessageParticipant | null | undefined) {
+  if (!participant) return "";
+  return isDeletedParticipant(participant) ? "デリートユーザー" : participant.name;
+}
+
+function getParticipantSubtitle(participant: MessageParticipant | null | undefined) {
+  if (!participant) return "";
+  if (isDeletedParticipant(participant)) return "このアカウントは削除されました";
+  return participant.subtitle || "";
+}
+
+function getParticipantInitials(participant: MessageParticipant | null | undefined) {
+  if (!participant) return "";
+  if (isDeletedParticipant(participant)) return "DU";
+  return participant.name.slice(0, 2).toUpperCase();
+}
+
+function getParticipantAvatarSrc(participant: MessageParticipant | null | undefined) {
+  if (!participant || isDeletedParticipant(participant)) return "";
+  return participant.avatar || "";
+}
+
 function formatMessageTime(iso: string) {
   try {
     const d = new Date(iso);
@@ -151,14 +179,16 @@ export function Messages({
                   }`}
                 >
                   <Avatar className="h-12 w-12 shrink-0 border border-orange-100 shadow-sm">
-                    <AvatarImage src={row.other.avatar} alt="" />
+                    <AvatarImage src={getParticipantAvatarSrc(row.other)} alt="" />
                     <AvatarFallback className="bg-orange-100 text-orange-800 text-xs">
-                      {row.other.name.slice(0, 2).toUpperCase()}
+                      {getParticipantInitials(row.other)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="truncate font-medium text-gray-900">{row.other.name}</p>
+                      <p className="truncate font-medium text-gray-900">
+                        {getParticipantDisplayName(row.other)}
+                      </p>
                       <span className="shrink-0 text-[11px] text-gray-500">
                         {formatListDate(row.lastMessageAtIso)}
                       </span>
@@ -195,15 +225,19 @@ export function Messages({
         {other ? (
           <>
             <Avatar className="h-11 w-11 border border-orange-100 shadow-sm">
-              <AvatarImage src={other.avatar} alt="" />
+              <AvatarImage src={getParticipantAvatarSrc(other)} alt="" />
               <AvatarFallback className="bg-orange-100 text-orange-800">
-                {other.name.slice(0, 2).toUpperCase()}
+                {getParticipantInitials(other)}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold text-gray-900">{other.name}</p>
-              {other.subtitle ? (
-                <p className="truncate text-xs text-gray-600">{other.subtitle}</p>
+              <p className="truncate font-semibold text-gray-900">
+                {getParticipantDisplayName(other)}
+              </p>
+              {getParticipantSubtitle(other) ? (
+                <p className="truncate text-xs text-gray-600">
+                  {getParticipantSubtitle(other)}
+                </p>
               ) : null}
             </div>
             <Button
@@ -212,6 +246,7 @@ export function Messages({
               size="sm"
               className="shrink-0 rounded-full border-orange-200 bg-white text-orange-800 hover:bg-orange-50"
               onClick={onOpenProfile}
+              disabled={isDeletedParticipant(other)}
             >
               <UserRound className="mr-1.5 h-4 w-4" />
               Profile
