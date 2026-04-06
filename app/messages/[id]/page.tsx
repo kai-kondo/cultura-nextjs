@@ -236,6 +236,7 @@ export default function MessagesPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
+  const [threadListenErrorCode, setThreadListenErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
@@ -267,7 +268,19 @@ export default function MessagesPage() {
 
   useEffect(() => {
     if (!me?.id) return;
-    const unsub = listenThreads(me.id, setChatThreads);
+    setThreadListenErrorCode(null);
+    const unsub = listenThreads(
+      me.id,
+      (items) => {
+        setChatThreads(items);
+        if (items.length > 0) {
+          setThreadListenErrorCode(null);
+        }
+      },
+      (errorCode) => {
+        setThreadListenErrorCode(errorCode);
+      }
+    );
     return () => unsub();
   }, [me?.id]);
 
@@ -449,6 +462,11 @@ export default function MessagesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50 p-4 pb-20 lg:pb-4">
       <div className="mx-auto max-w-7xl">
+        {threadListenErrorCode ? (
+          <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Debug: listenThreads error code = <span className="font-semibold">{threadListenErrorCode}</span>
+          </div>
+        ) : null}
         <Messages
           me={me}
           threads={threads}

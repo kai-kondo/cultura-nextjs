@@ -153,7 +153,8 @@ import {
    */
   export function listenThreads(
     myUid: string,
-    callback: (threads: ChatThread[]) => void
+  callback: (threads: ChatThread[]) => void,
+  onError?: (errorCode: string, error: unknown) => void
   ): Unsubscribe {
     const q = query(
       collection(db, "threads"),
@@ -174,6 +175,14 @@ import {
       },
       (error) => {
         console.error("listenThreads:", error);
+        const errorCode =
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          typeof (error as { code?: unknown }).code === "string"
+            ? (error as { code: string }).code
+            : "unknown";
+        onError?.(errorCode, error);
         callback([]);
       }
     );
