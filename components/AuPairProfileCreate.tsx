@@ -31,11 +31,57 @@ import {
   saveAuPairPhotos,
 } from "@/lib/profile-actions";
 
-interface AuPairProfileCreateProps {
-  onComplete: () => void;
+interface AuPairProfileFormData {
+  firstName: string;
+  lastName: string;
+  age: string;
+  nationality: string;
+  currentLocation: string;
+  photo: File | null;
+  galleryPhotos: File[];
+  bio: string;
+  skills: string[];
+  languages: { language: string; level: string }[];
+  childcareExperience: string;
+  previousExperience: string;
+  certifications: string[];
+  availableFrom: string;
+  duration: string;
+  preferredLocations: string[];
 }
 
-export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
+const emptyAuPairProfileFormData: AuPairProfileFormData = {
+  firstName: "",
+  lastName: "",
+  age: "",
+  nationality: "",
+  currentLocation: "",
+  photo: null,
+  galleryPhotos: [],
+  bio: "",
+  skills: [],
+  languages: [],
+  childcareExperience: "",
+  previousExperience: "",
+  certifications: [],
+  availableFrom: "",
+  duration: "",
+  preferredLocations: [],
+};
+
+interface AuPairProfileCreateProps {
+  onComplete: () => void;
+  mode?: "create" | "edit";
+  initialData?: Partial<AuPairProfileFormData>;
+  initialProfileId?: string | null;
+}
+
+export function AuPairProfileCreate({
+  onComplete,
+  mode = "create",
+  initialData,
+  initialProfileId = null,
+}: AuPairProfileCreateProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 5;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,32 +89,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
   const [photoPreview, setPhotoPreview] = useState<string>("");
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
 
-  const [profileData, setProfileData] = useState({
-    // Step 1: Basic Info
-    firstName: "",
-    lastName: "",
-    age: "",
-    nationality: "",
-    currentLocation: "",
-
-    // Step 2: Photo & Bio
-    photo: null as File | null,
-    galleryPhotos: [] as File[],
-    bio: "",
-
-    // Step 3: Skills & Languages
-    skills: [] as string[],
-    languages: [] as { language: string; level: string }[],
-
-    // Step 4: Experience
-    childcareExperience: "",
-    previousExperience: "",
-    certifications: [] as string[],
-
-    // Step 5: Preferences
-    availableFrom: "",
-    duration: "",
-    preferredLocations: [] as string[],
+  const [profileData, setProfileData] = useState<AuPairProfileFormData>({
+    ...emptyAuPairProfileFormData,
+    ...initialData,
   });
 
   const [newSkill, setNewSkill] = useState("");
@@ -78,7 +101,17 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
   });
   const [newLocation, setNewLocation] = useState("");
 
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(initialProfileId);
+
+  useEffect(() => {
+    if (!initialData) return;
+    setProfileData((prev) => ({
+      ...prev,
+      ...initialData,
+      photo: null,
+      galleryPhotos: [],
+    }));
+  }, [initialData]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -90,13 +123,12 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
       if (profileRef) {
         const [, id] = profileRef.split("/");
         setProfileId(id);
-      } else {
-        // Create minimal profile and link it
+      } else if (mode === "create") {
         const id = await createAuPairProfileAndLink(u.uid, {
           name: `${profileData.firstName} ${profileData.lastName}`.trim(),
           age: profileData.age ? Number(profileData.age) : null,
           nationality: profileData.nationality || "",
-          aboutMe: "",
+          aboutMe: profileData.bio || "",
         });
         setProfileId(id);
       }
@@ -185,8 +217,13 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
           level: "beginner",
         })),
         languages: {
-          primary: { language: "English", proficiency: "basic" },
-          secondary: profileData.languages.map((l) => ({
+          primary: profileData.languages[0]
+            ? {
+                language: profileData.languages[0].language,
+                proficiency: mapLanguageLevel(profileData.languages[0].level),
+              }
+            : null,
+          secondary: profileData.languages.slice(1).map((l) => ({
             language: l.language,
             proficiency: mapLanguageLevel(l.level),
           })),
@@ -206,6 +243,7 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
             ? { type: "other", description: profileData.previousExperience }
             : null,
         ].filter(Boolean),
+        certifications: profileData.certifications,
       });
     }
     if (step === 5) {
@@ -362,7 +400,9 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8"
         >
-          <h1 className="text-gray-900 mb-2">Create Your Au Pair Profile</h1>
+          <h1 className="text-gray-900 mb-2">
+            {mode === "create" ? "Create Your Au Pair Profile" : "Edit Your Au Pair Profile"}
+          </h1>
           <p className="text-gray-600">
             Step {currentStep} of {totalSteps}
           </p>
@@ -852,7 +892,11 @@ export function AuPairProfileCreate({ onComplete }: AuPairProfileCreateProps) {
                   disabled={currentStep === 2 && !profileId}
                   className="gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 disabled:opacity-60"
                 >
-                  {currentStep === totalSteps ? "Complete Profile" : "Next"}
+                  {currentStep === totalSteps
+                    ? mode === "create"
+                      ? "Complete Profile"
+                      : "Save Changes"
+                    : "Next"}
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>

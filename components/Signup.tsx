@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { signUpEmail } from "@/lib/auth-actions";
+import { doc, getDoc } from "firebase/firestore";
+import { signUpEmail, signInGoogle } from "@/lib/auth-actions";
+import { db } from "@/lib/firebase";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
@@ -19,6 +21,7 @@ interface SignupProps {
 export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
   const [userType, setUserType] = useState<"family" | "aupair">("aupair");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -31,15 +34,48 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
     if (!formData.agreedToTerms) return;
     try {
       await signUpEmail(formData.email, formData.password, userType, formData.name);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("userType", userType);
+      }
       onSignupComplete?.(userType);
     } catch (err: any) {
       alert(err?.message || "Signup failed. Please try again.");
     }
   };
 
-  const handleSocialSignup = (provider: string) => {
-    // In a real app, this would trigger OAuth flow
-    onSignupComplete?.(userType);
+  const handleSocialSignup = async (provider: string) => {
+    if (provider !== "google") return;
+
+    setLoading(true);
+    try {
+      const user = await signInGoogle(userType);
+      const snap = await getDoc(doc(db, "users", user.uid));
+      const resolvedUserType =
+        (snap.exists() && ((snap.data() as any).userType as "family" | "aupair")) ||
+        userType;
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("userType", resolvedUserType);
+      }
+      onSignupComplete?.(resolvedUserType);
+    } catch (err: any) {
+      console.error("[Google Signup] error raw:", err);
+      console.error("[Google Signup] code:", err?.code);
+      console.error("[Google Signup] message:", err?.message);
+
+      let message = "Google認証に失敗しました。もう一度お試しください。";
+      if (err?.code === "auth/popup-closed-by-user") {
+        message = "Google認証がキャンセルされました。";
+      } else if (err?.code === "auth/popup-blocked") {
+        message = "ポップアップがブロックされました。ブラウザ設定をご確認ください。";
+      } else if (err?.code === "auth/cancelled-popup-request") {
+        message = "Google認証が中断されました。もう一度お試しください。";
+      }
+
+      alert(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -104,7 +140,13 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
               <Label className="text-sm text-gray-700 mb-3 block">I am a...</Label>
               <RadioGroup
                 value={userType}
-                onValueChange={(value) => setUserType(value as "family" | "aupair")}
+                onValueChange={(value) => {
+                  const nextType = value as "family" | "aupair";
+                  setUserType(nextType);
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("userType", nextType);
+                  }
+                }}
                 className="grid grid-cols-2 gap-3"
               >
                 <div>
@@ -224,10 +266,10 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
                 <Button
                   type="submit"
-                  disabled={!formData.agreedToTerms}
+                  disabled={!formData.agreedToTerms || loading}
                   className="w-full h-12 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-rose-500 hover:from-orange-600 hover:via-amber-600 hover:to-rose-600 text-white shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span>Create Account</span>
+                  <span>{loading ? "Please wait..." : "Create Account"}</span>
                 </Button>
               </motion.div>
             </form>
@@ -245,8 +287,9 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleSocialSignup("google")}
-                  className="w-full h-12 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm hover:shadow-md transition-all"
+                  disabled={loading}
+                  onClick={() => void handleSocialSignup("google")}
+                  className="w-full h-12 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm hover:shadow-md transition-all disabled:opacity-60"
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
                     <path
@@ -266,7 +309,9 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  <span className="text-gray-700">Continue with Google</span>
+                  <span className="text-gray-700">
+                    {loading ? "Signing in..." : "Continue with Google"}
+                  </span>
                 </Button>
               </motion.div>
 
@@ -274,8 +319,8 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleSocialSignup("email")}
-                  className="w-full h-12 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm hover:shadow-md transition-all"
+                  disabled
+                  className="w-full h-12 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white shadow-sm opacity-60"
                 >
                   <Mail className="w-5 h-5 text-gray-600" />
                   <span className="text-gray-700">Continue with Email</span>

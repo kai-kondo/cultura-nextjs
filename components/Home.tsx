@@ -78,6 +78,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { Header } from "./Header";
 
 interface HomeProps {
   userType: "family" | "aupair";
@@ -677,28 +678,7 @@ export function Home({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-amber-50">
-      {/* Header */}
-      <header className="bg-white/90 backdrop-blur-md border-b border-orange-100 sticky top-0 z-20 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            {/* Logo */}
-            <div className="flex items-center gap-2">
-              <CulturaLogo size={40} />
-              <span className="text-gray-800">Cultura</span>
-            </div>
-
-            <div className="flex-1" />
-
-            {/* Desktop Navigation */}
-            <DesktopNav
-              onOpenSettings={onOpenSettings}
-              onOpenProfile={onOpenMyProfile}
-              onOpenCommunity={onOpenCommunity}
-              avatarUrl={userPhoto || undefined}
-            />
-          </div>
-        </div>
-      </header>
+      
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">

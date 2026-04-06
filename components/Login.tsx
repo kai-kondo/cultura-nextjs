@@ -5,7 +5,7 @@ import { Mail } from "lucide-react";
 import { motion } from "motion/react";
 import { CulturaLogo } from "./CulturaLogo";
 import { useState } from "react";
-import { signInEmail } from "@/lib/auth-actions";
+import { signInEmail, signInGoogle } from "@/lib/auth-actions";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
@@ -64,17 +64,48 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
       console.error("[Login] error raw:", err);
       console.error("[Login] code:", err?.code);
       console.error("[Login] message:", err?.message);
-      let message = "Hmm, something went off. Wanna try again?👶";
+      let message = "Something went wrong. Please try again.";
       if (err.code === "auth/invalid-email") {
-        message = "That email doesn’t look right 🤔";
+        message = "Please enter a valid email address.";
       } else if (err.code === "auth/user-not-found") {
-        message = "No account found with that email 🌱 — maybe sign up first?";
+        message = "No account was found with that email address.";
       } else if (err.code === "auth/wrong-password") {
-        message =
-          "That password doesn’t match our vibes 😅 — give it another shot!";
+        message = "The password you entered is incorrect.";
       } else if (err.code === "auth/too-many-requests") {
-        message = "Whoa, too many tries! Let’s chill for a bit ☕️";
+        message = "Too many attempts. Please try again later.";
       }
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleLogin() {
+    setError(null);
+    setLoading(true);
+
+    try {
+      const user = await signInGoogle("aupair");
+      const snap = await getDoc(doc(db, "users", user.uid));
+      const userType =
+        (snap.exists() && ((snap.data() as any).userType as "family" | "aupair")) ||
+        "aupair";
+
+      onLogin?.(userType);
+    } catch (err: any) {
+      console.error("[Google Login] error raw:", err);
+      console.error("[Google Login] code:", err?.code);
+      console.error("[Google Login] message:", err?.message);
+
+      let message = "Google sign-in failed. Please try again.";
+      if (err?.code === "auth/popup-closed-by-user") {
+        message = "Google sign-in was cancelled.";
+      } else if (err?.code === "auth/popup-blocked") {
+        message = "The popup was blocked. Please check your browser settings.";
+      } else if (err?.code === "auth/cancelled-popup-request") {
+        message = "Google sign-in was interrupted. Please try again.";
+      }
+
       setError(message);
     } finally {
       setLoading(false);
@@ -130,11 +161,9 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
                 <span className="text-gray-400 text-lg align-top">(Beta)</span>
               </h1>
               <p className="text-gray-600 leading-relaxed">
-                Cultura is where people grow —
+                Meet trusted families and au pairs.
                 <br />
-                Families open their homes, Au Pairs share their hearts,
-                <br />
-                and together, they cultivate understanding.
+                Start with Google or email to continue.
               </p>
             </div>
 
@@ -150,8 +179,9 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
                 <Button
                   variant="outline"
                   aria-label="Continue with Google"
-                  className="group relative w-full h-auto py-4 px-6 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm hover:shadow-md transition-all"
-                  onClick={() => onLogin?.("aupair")}
+                  disabled={loading}
+                  className="group relative w-full h-auto py-4 px-6 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm hover:shadow-md transition-all disabled:opacity-60"
+                  onClick={() => void handleGoogleLogin()}
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
                     <path
@@ -172,7 +202,7 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
                     />
                   </svg>
                   <span className="font-medium text-gray-700">
-                    Continue with Google
+                    {loading ? "Signing in..." : "Continue with Google"}
                   </span>
                 </Button>
               </motion.div>
@@ -232,21 +262,7 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
               </span>
             </div>
 
-            {/* Main CTA */}
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-            >
-              <Button
-                className="w-full h-auto py-4 px-6 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-rose-500 hover:from-orange-600 hover:via-amber-600 hover:to-rose-600 text-white shadow-lg hover:shadow-xl transition-all"
-                onClick={() => onLogin?.("aupair")}
-              >
-                <span className="font-semibold text-lg">Get Started</span>
-              </Button>
-            </motion.div>
-
-            <p className="text-center text-xs text-gray-500 mt-4">
+            <p className="text-center text-xs text-gray-500 mt-2">
               By continuing, you agree to our Terms of Service and Privacy
               Policy
             </p>

@@ -27,8 +27,47 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { createFamilyProfileAndLink, patchFamilyProfile, saveFamilyPhotos } from "@/lib/profile-actions";
 
+interface FamilyProfileFormData {
+  familyName: string;
+  city: string;
+  country: string;
+  adults: string;
+  photo: File | null;
+  galleryPhotos: File[];
+  familyBio: string;
+  children: Child[];
+  homeDescription: string;
+  providedRoom: string;
+  desiredSkills: string[];
+  weeklyAllowance: string;
+  startDate: string;
+  duration: string;
+  additionalBenefits: string;
+}
+
+const emptyFamilyProfileFormData: FamilyProfileFormData = {
+  familyName: "",
+  city: "",
+  country: "",
+  adults: "2",
+  photo: null,
+  galleryPhotos: [],
+  familyBio: "",
+  children: [],
+  homeDescription: "",
+  providedRoom: "",
+  desiredSkills: [],
+  weeklyAllowance: "",
+  startDate: "",
+  duration: "",
+  additionalBenefits: "",
+};
+
 interface FamilyProfileCreateProps {
   onComplete: () => void;
+  mode?: "create" | "edit";
+  initialData?: Partial<FamilyProfileFormData>;
+  initialProfileId?: string | null;
 }
 
 interface Child {
@@ -36,7 +75,12 @@ interface Child {
   gender: string;
 }
 
-export function FamilyProfileCreate({ onComplete }: FamilyProfileCreateProps) {
+export function FamilyProfileCreate({
+  onComplete,
+  mode = "create",
+  initialData,
+  initialProfileId = null,
+}: FamilyProfileCreateProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 5;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,34 +88,22 @@ export function FamilyProfileCreate({ onComplete }: FamilyProfileCreateProps) {
   const [photoPreview, setPhotoPreview] = useState<string>("");
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
 
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(initialProfileId);
 
-  const [profileData, setProfileData] = useState({
-    // Step 1: Basic Info
-    familyName: "",
-    city: "",
-    country: "",
-    adults: "2",
-
-    // Step 2: Photo & Bio
-    photo: null as File | null,
-    galleryPhotos: [] as File[],
-    familyBio: "",
-
-    // Step 3: Children
-    children: [] as Child[],
-
-    // Step 4: Home & Requirements
-    homeDescription: "",
-    providedRoom: "",
-    desiredSkills: [] as string[],
-
-    // Step 5: Offer & Preferences
-    weeklyAllowance: "",
-    startDate: "",
-    duration: "",
-    additionalBenefits: "",
+  const [profileData, setProfileData] = useState<FamilyProfileFormData>({
+    ...emptyFamilyProfileFormData,
+    ...initialData,
   });
+
+  useEffect(() => {
+    if (!initialData) return;
+    setProfileData((prev) => ({
+      ...prev,
+      ...initialData,
+      photo: null,
+      galleryPhotos: [],
+    }));
+  }, [initialData]);
 
   const [newSkill, setNewSkill] = useState("");
   const [newChild, setNewChild] = useState<Child>({ age: "", gender: "Any" });
@@ -84,7 +116,7 @@ export function FamilyProfileCreate({ onComplete }: FamilyProfileCreateProps) {
       if (profileRef) {
         const [, id] = profileRef.split("/");
         setProfileId(id);
-      } else {
+      } else if (mode === "create") {
         const id = await createFamilyProfileAndLink(u.uid, {
           familyName: profileData.familyName || "",
           location: { country: profileData.country || "", flag: "", city: profileData.city || "" },
@@ -267,7 +299,9 @@ export function FamilyProfileCreate({ onComplete }: FamilyProfileCreateProps) {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8"
         >
-          <h1 className="text-gray-900 mb-2">Create Your Family Profile</h1>
+          <h1 className="text-gray-900 mb-2">
+            {mode === "create" ? "Create Your Family Profile" : "Edit Your Family Profile"}
+          </h1>
           <p className="text-gray-600">
             Step {currentStep} of {totalSteps}
           </p>
@@ -688,7 +722,11 @@ export function FamilyProfileCreate({ onComplete }: FamilyProfileCreateProps) {
                   onClick={handleNext}
                   className="gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700"
                 >
-                  {currentStep === totalSteps ? "Complete Profile" : "Next"}
+                  {currentStep === totalSteps
+                    ? mode === "create"
+                      ? "Complete Profile"
+                      : "Save Changes"
+                    : "Next"}
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>

@@ -1,367 +1,325 @@
-// Messages.tsx
-import * as React from "react";
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Loader2, Send, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Separator } from "./ui/separator";
-import { ScrollArea } from "./ui/scroll-area";
-import {
-  Search,
-  Send,
-  Paperclip,
-  Image as ImageIcon,
-  Smile,
-  Phone,
-  Video,
-  Ellipsis,
-  CheckCheck,
-  ArrowLeft,
-  Heart,
-} from "lucide-react";
 
-type Participant = {
+export type MessageParticipant = {
   id: string;
   name: string;
   avatar: string;
-  subtitle?: string; // location, role etc.
+  subtitle?: string;
 };
 
-type Message = {
+export type MessageItem = {
   id: string;
   fromId: string;
-  text?: string;
-  imageUrl?: string;
-  createdAt: string; // ISO
-  read?: boolean;
+  text: string;
+  imageUrl: string | null;
+  createdAt: string;
+  read: boolean;
 };
 
-type Thread = {
+export type MessageThread = {
   id: string;
-  participants: [Participant, Participant]; // you + other
+  participants: [MessageParticipant, MessageParticipant];
   lastMessageAt: string;
   unread: number;
-  messages: Message[];
-  tags?: string[]; // “Surf”, “Japanese” etc
+  messages: MessageItem[];
+  tags?: string[];
 };
 
-interface MessagesProps {
-  me: Participant;
-  threads: Thread[];
-  onOpenProfile?: (otherId: string) => void;
+/** One row in the left conversation list (backed by Firestore threads). */
+export type MessageConversationListItem = {
+  threadId: string;
+  /** Other participant (for avatar / label). */
+  other: MessageParticipant;
+  lastPreview: string;
+  lastMessageAtIso: string;
+  unread: number;
+};
+
+export type MessagesProps = {
+  me: MessageParticipant;
+  threads: MessageThread[];
+  activeThreadId?: string | null;
+  loading?: boolean;
+  sending?: boolean;
+  onSendMessage: (args: { threadId: string; text: string }) => void | Promise<void>;
+  onOpenProfile: () => void;
+  /** When set, shown as the left column on large screens. */
+  conversationList?: MessageConversationListItem[];
+  /** Navigate to `/messages/[routeId]` (other user’s uid). */
+  onSelectConversation?: (routeId: string) => void;
+};
+
+function formatMessageTime(iso: string) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
 }
 
-export function Messages({ me, threads, onOpenProfile }: MessagesProps) {
-  const [query, setQuery] = useState("");
-  const [activeId, setActiveId] = useState(threads[0]?.id);
-  const active = useMemo(
-    () => threads.find((t) => t.id === activeId),
-    [threads, activeId]
-  );
-
-  const other =
-    active?.participants.find((p) => p.id !== me.id) || active?.participants[0];
-
-  // Filtered conversations
-  const filtered = useMemo(() => {
-    if (!query.trim()) return threads;
-    const q = query.toLowerCase();
-    return threads.filter((t) => {
-      const o = t.participants.find((p) => p.id !== me.id)!;
-      return (
-        o.name.toLowerCase().includes(q) ||
-        (o.subtitle || "").toLowerCase().includes(q)
-      );
-    });
-  }, [threads, query, me.id]);
-
-  return (
-    <div className="grid h-[calc(100vh-120px)] grid-cols-1 md:grid-cols-[360px_minmax(0,1fr)] bg-gradient-to-br from-orange-50 via-amber-50 to-rose-100 rounded-2xl overflow-hidden border border-orange-100">
-      {/* Left: thread list */}
-      <aside className="hidden md:flex flex-col bg-white/90 backdrop-blur border-r">
-        <div className="p-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search conversations"
-              className="pl-9"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-        </div>
-        <Separator />
-        <ScrollArea className="flex-1">
-          <ul className="p-2 space-y-1">
-            {filtered.map((t) => {
-              const o = t.participants.find((p) => p.id !== me.id)!;
-              const activeStyle =
-                t.id === activeId
-                  ? "bg-blue-50 border-blue-200"
-                  : "hover:bg-gray-50";
-              return (
-                <li key={t.id}>
-                  <button
-                    onClick={() => setActiveId(t.id)}
-                    className={`w-full text-left p-3 rounded-xl border ${activeStyle} transition-colors`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={o.avatar} alt={o.name} />
-                        <AvatarFallback>{o.name.slice(0, 2)}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium text-gray-900 truncate">
-                            {o.name}
-                          </p>
-                          <span className="text-[11px] text-gray-500">
-                            {new Date(t.lastMessageAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 truncate">
-                          {o.subtitle}
-                        </p>
-                      </div>
-                      {t.unread > 0 && (
-                        <span className="ml-2 inline-flex min-w-[1.5rem] justify-center rounded-full bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white">
-                          {t.unread}
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </ScrollArea>
-      </aside>
-
-      {/* Right: chat area */}
-      <main className="flex flex-col bg-white/80 backdrop-blur">
-        {/* Chat header */}
-        <div className="flex items-center gap-3 px-3 md:px-4 py-3 border-b bg-white/70">
-          <button
-            className="md:hidden rounded-full p-2 hover:bg-gray-100"
-            onClick={() => setActiveId(undefined as any)}
-            aria-label="Back"
-            title="Back"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <Avatar 
-            className="h-9 w-9 cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all" 
-            onClick={() => onOpenProfile?.(other?.id || '')}
-          >
-            <AvatarImage src={other?.avatar || ""} alt={other?.name || ""} />
-            <AvatarFallback>{other?.name?.slice(0, 2) || "AU"}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onOpenProfile?.(other?.id || '')}>
-            <p className="font-medium text-gray-900 truncate hover:text-blue-600 transition-colors">{other?.name}</p>
-            <p className="text-xs text-gray-500 truncate">
-              {other?.subtitle || "Cultural Au Pair"}
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" aria-label="Audio call">
-              <Phone className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon" aria-label="Video call">
-              <Video className="w-5 h-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="View Profile"
-              onClick={() => onOpenProfile?.(other?.id || '')}
-              title="View Profile"
-            >
-              <Ellipsis className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <MessageList me={me} messages={active?.messages || []} />
-
-        {/* Composer */}
-        <Composer />
-      </main>
-    </div>
-  );
+function formatListDate(iso: string) {
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    const sameDay =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+    if (sameDay) {
+      return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
 }
 
-/* ---------- Subcomponents ---------- */
+export function Messages({
+  me,
+  threads,
+  activeThreadId,
+  loading = false,
+  sending = false,
+  onSendMessage,
+  onOpenProfile,
+  conversationList = [],
+  onSelectConversation,
+}: MessagesProps) {
+  const router = useRouter();
+  const [draft, setDraft] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-function MessageList({ me, messages }: { me: Participant; messages: Message[] }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const activeThread = useMemo(() => {
+    if (threads.length === 0) return null;
+    if (activeThreadId) {
+      return threads.find((t) => t.id === activeThreadId) ?? threads[0];
+    }
+    return threads[0];
+  }, [threads, activeThreadId]);
 
-  // auto-scroll to bottom when new messages
+  const other = useMemo(() => {
+    if (!activeThread) return null;
+    return (
+      activeThread.participants.find((p) => p.id !== me.id) ?? activeThread.participants[1] ?? null
+    );
+  }, [activeThread, me.id]);
+
   useEffect(() => {
-    ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeThread?.messages.length, activeThread?.id]);
 
-  // group by date
-  const groups = useMemo(() => {
-    const map = new Map<string, Message[]>();
-    messages.forEach((m) => {
-      const d = new Date(m.createdAt);
-      const key = d.toLocaleDateString();
-      const arr = map.get(key) || [];
-      arr.push(m);
-      map.set(key, arr);
-    });
-    return Array.from(map.entries());
-  }, [messages]);
+  const handleSend = async () => {
+    const text = draft.trim();
+    if (!text || !activeThread || sending) return;
+    setDraft("");
+    await onSendMessage({ threadId: activeThread.id, text });
+  };
+
+  const showChatLoader = loading && !activeThread;
+  const showSidebar = conversationList.length > 0 && typeof onSelectConversation === "function";
 
   return (
-    <div ref={ref} className="flex-1 overflow-y-auto px-3 md:px-6 py-4 space-y-6">
-      {groups.map(([date, msgs]) => (
-        <div key={date} className="space-y-3">
-          <div className="sticky top-2 z-[1] flex justify-center">
-            <span className="rounded-full bg-white/80 backdrop-blur px-3 py-1 text-[11px] text-gray-600 border">
-              {date}
-            </span>
+    <div className="flex h-[min(760px,calc(100vh-5.5rem))] min-h-[500px] flex-col overflow-hidden rounded-[28px] border border-orange-100/80 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)] lg:flex-row">
+      {showSidebar ? (
+        <aside
+          className="hidden h-full w-[min(100%,340px)] shrink-0 flex-col border-r border-orange-100/80 bg-[#fffaf8] lg:flex"
+          aria-label="Conversations"
+        >
+          <div className="border-b border-orange-100/80 px-5 py-4">
+            <p className="text-[13px] font-semibold tracking-wide text-orange-600">Chats</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">Messages</p>
           </div>
-          {msgs.map((m) => {
-            const isMe = m.fromId === me.id;
-            return (
-              <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[78%] rounded-2xl px-3 py-2 shadow-sm ${
-                    isMe
-                      ? "bg-gradient-to-br from-orange-500 to-rose-600 text-white"
-                      : "bg-white border"
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {conversationList.map((row) => {
+              const selected = row.threadId === activeThreadId;
+              return (
+                <button
+                  key={row.threadId}
+                  type="button"
+                  onClick={() => onSelectConversation!(row.other.id)}
+                  className={`mx-2 my-1.5 flex w-[calc(100%-1rem)] items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all ${
+                    selected
+                      ? "bg-white shadow-[0_8px_24px_rgba(251,113,133,0.12)] ring-1 ring-orange-100"
+                      : "bg-transparent hover:bg-white"
                   }`}
                 >
-                  {m.text && (
-                    <p className={`text-sm leading-relaxed break-words ${isMe ? "" : "text-gray-800"}`}>
-                      {m.text}
+                  <Avatar className="h-12 w-12 shrink-0 border border-orange-100 shadow-sm">
+                    <AvatarImage src={row.other.avatar} alt="" />
+                    <AvatarFallback className="bg-orange-100 text-orange-800 text-xs">
+                      {row.other.name.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate font-medium text-gray-900">{row.other.name}</p>
+                      <span className="shrink-0 text-[11px] text-gray-500">
+                        {formatListDate(row.lastMessageAtIso)}
+                      </span>
+                    </div>
+                    <p className="truncate text-sm text-gray-600">
+                      {row.lastPreview || "No messages yet"}
                     </p>
-                  )}
-                  {m.imageUrl && (
-                    <img
-                      src={m.imageUrl}
-                      alt="attachment"
-                      className="rounded-lg mt-1 max-h-64 object-cover"
-                    />
-                  )}
-                  <div className={`mt-1 flex items-center gap-1 ${isMe ? "text-white/80" : "text-gray-500"}`}>
-                    <span className="text-[10px]">
-                      {new Date(m.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    {isMe && m.read && <CheckCheck className="w-3.5 h-3.5" aria-label="Read" />}
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ))}
+                  {row.unread > 0 ? (
+                    <span className="mt-1 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-1.5 text-[10px] font-semibold text-white shadow-sm">
+                      {row.unread > 99 ? "99+" : row.unread}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </aside>
+      ) : null}
 
-      {/* typing indicator (demo) */}
-      <div className="flex items-center gap-2 text-gray-500">
-        <div className="h-6 w-10 rounded-full bg-gray-200 animate-pulse" />
-        <span className="text-xs">Typing…</span>
-      </div>
-    </div>
-  );
-}
-
-function Composer() {
-  const [text, setText] = useState("");
-  const submit = () => {
-    if (!text.trim()) return;
-    // TODO: send API
-    setText("");
-  };
-
-  return (
-    <div className="border-t bg-white/80 backdrop-blur px-3 md:px-4 py-3">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" title="Attach file" aria-label="Attach file">
-          <Paperclip className="w-5 h-5" />
-        </Button>
-        <Button variant="ghost" size="icon" title="Insert image" aria-label="Insert image">
-          <ImageIcon className="w-5 h-5" />
-        </Button>
-        <Button variant="ghost" size="icon" title="Reaction" aria-label="Reaction">
-          <Smile className="w-5 h-5" />
-        </Button>
-
-        <Input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), submit())}
-          placeholder="Write a message…"
-          className="flex-1"
-        />
-
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+      <div className="flex items-center gap-3 border-b border-orange-100/80 bg-white px-4 py-3 sm:px-5">
         <Button
-          onClick={submit}
-          className="bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white"
-          aria-label="Send message"
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0 rounded-full text-gray-700 hover:bg-orange-50"
+          aria-label="Back to home"
+          onClick={() => router.push("/home")}
         >
-          <Send className="w-4 h-4 mr-1" />
-          Send
+          <ArrowLeft className="h-5 w-5" />
         </Button>
+
+        {other ? (
+          <>
+            <Avatar className="h-11 w-11 border border-orange-100 shadow-sm">
+              <AvatarImage src={other.avatar} alt="" />
+              <AvatarFallback className="bg-orange-100 text-orange-800">
+                {other.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-gray-900">{other.name}</p>
+              {other.subtitle ? (
+                <p className="truncate text-xs text-gray-600">{other.subtitle}</p>
+              ) : null}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 rounded-full border-orange-200 bg-white text-orange-800 hover:bg-orange-50"
+              onClick={onOpenProfile}
+            >
+              <UserRound className="mr-1.5 h-4 w-4" />
+              Profile
+            </Button>
+          </>
+        ) : (
+          <div className="flex flex-1 items-center gap-2 text-sm text-gray-600">
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
+                Loading conversation…
+              </>
+            ) : (
+              "No conversation"
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="relative flex min-h-0 flex-1 flex-col bg-[#fffdfc]">
+        {showChatLoader ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-gray-600">
+            <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+            <p className="text-sm">Loading messages…</p>
+          </div>
+        ) : activeThread ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(251,113,133,0.06),_transparent_32%),radial-gradient(circle_at_bottom,_rgba(249,115,22,0.06),_transparent_28%)] px-4 py-5 sm:px-5">
+              {activeThread.messages.length === 0 ? (
+                <p className="text-center text-sm text-gray-500">No messages yet. Say hello!</p>
+              ) : null}
+              {activeThread.messages.map((message) => {
+                const mine = message.fromId === me.id;
+                return (
+                  <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm sm:max-w-[72%] ${
+                        mine
+                          ? "rounded-br-md bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-[0_10px_24px_rgba(249,115,22,0.22)]"
+                          : "rounded-bl-md border border-orange-100/80 bg-white text-gray-900 shadow-[0_6px_18px_rgba(15,23,42,0.06)]"
+                      }`}
+                    >
+                      {message.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={message.imageUrl}
+                          alt=""
+                          className="mb-2 max-h-48 w-full rounded-lg object-cover"
+                        />
+                      ) : null}
+                      {message.text ? (
+                        <p className="whitespace-pre-wrap break-words leading-relaxed">{message.text}</p>
+                      ) : null}
+                      <div
+                        className={`mt-1 flex items-center justify-end gap-2 text-[10px] ${
+                          mine ? "text-white/80" : "text-gray-500"
+                        }`}
+                      >
+                        <span>{formatMessageTime(message.createdAt)}</span>
+                        {mine ? <span>{message.read ? "Read" : "Sent"}</span> : null}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={bottomRef} />
+            </div>
+
+            <div className="border-t border-orange-100/80 bg-white px-4 py-4 sm:px-5">
+              <div className="flex items-end gap-3 rounded-[26px] border border-orange-100 bg-[#fffaf8] p-2 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void handleSend();
+                    }
+                  }}
+                  placeholder="Type a message…"
+                  rows={1}
+                  disabled={sending || loading}
+                  className="min-h-[44px] flex-1 resize-none border-0 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 disabled:opacity-60"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 rounded-full bg-gradient-to-r from-orange-500 to-rose-600 shadow-[0_10px_24px_rgba(249,115,22,0.22)] hover:from-orange-600 hover:to-rose-700"
+                  disabled={sending || loading || !draft.trim()}
+                  onClick={() => void handleSend()}
+                  aria-label="Send message"
+                >
+                  {sending ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-gray-500">
+            Unable to load this conversation.
+          </div>
+        )}
+      </div>
       </div>
     </div>
   );
-}
-
-
-
-/* ---------- Demo usage ---------- */
-// 下記のダミーデータを消して、実データに差し替えれば即使えます。
-export function DemoMessages() {
-  const me: Participant = {
-    id: "me",
-    name: "Kai",
-    avatar: "https://i.pravatar.cc/120?img=3",
-    subtitle: "Ocean Grove • EN/JP",
-  };
-  const other: Participant = {
-    id: "emma",
-    name: "Emma",
-    avatar: "https://i.pravatar.cc/120?img=5",
-    subtitle: "Sydney • Au Pair (Swim/Art)",
-  };
-  const threads: Thread[] = [
-    {
-      id: "t1",
-      participants: [me, other],
-      lastMessageAt: new Date().toISOString(),
-      unread: 2,
-      messages: [
-        {
-          id: "m1",
-          fromId: "emma",
-          text: "Hi! I saw your profile and it looks like a great fit.",
-          createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-        },
-        {
-          id: "m2",
-          fromId: "me",
-          text: "Awesome! We live near the beach and our kids love swimming.",
-          createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-          read: true,
-        },
-        {
-          id: "m3",
-          fromId: "emma",
-          text: "Sounds perfect. I can do after-school hours Mon–Thu.",
-          createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
-        },
-      ],
-    },
-  ];
-
-  return <Messages me={me} threads={threads} onOpenProfile={(id) => console.log("open", id)} />;
 }

@@ -1,13 +1,13 @@
 // components/ProfileLayout.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Heart, MessageCircle, Share2, Flag, Star } from "lucide-react";
-import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { addDoc, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import AuPairProfile from "./AuPairProfile";
 import { FamilyProfile } from "./FamilyProfile";
 import type {
@@ -30,6 +30,8 @@ export function ProfileLayout({
     AuPairProfileType | FamilyProfileType | null
   >(null);
   const [loading, setLoading] = useState(true);
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   // userType に応じて、正しいコレクションを購読
   useEffect(() => {
@@ -37,14 +39,73 @@ export function ProfileLayout({
     setLoading(true);
     const col = userType === "aupair" ? "auPairProfiles" : "familyProfiles";
     const unsub = onSnapshot(doc(db, col, profileId), (snap) => {
-      setProfile(snap.exists() ? (snap.data() as any) : null);
+      if (snap.exists()) {
+        const data = snap.data() as any;
+        setProfile(data);
+        setProfileUserId(typeof data?.userId === "string" ? data.userId : null);
+      } else {
+        setProfile(null);
+        setProfileUserId(null);
+      }
       setLoading(false);
     });
     return () => unsub();
   }, [profileId, userType]);
 
   const isAuPair = userType === "aupair";
-  const isMyProfile = profileId === "me"; // （通常は実ID運用、保持しておく）
+  const currentUserId = auth.currentUser?.uid ?? null;
+  const favoriteDocId = currentUserId && profileUserId ? `${currentUserId}_${profileUserId}` : null;
+  const isMyProfile = Boolean(currentUserId && profileUserId && currentUserId === profileUserId);
+  const messageTargetUserId = useMemo(() => {
+    if (!profileUserId) return null;
+    if (isMyProfile) return null;
+    return profileUserId;
+  }, [isMyProfile, profileUserId]);
+
+  useEffect(() => {
+    if (!favoriteDocId) return;
+
+    const checkFavorite = async () => {
+      const ref = doc(db, "favorites", favoriteDocId);
+      const snap = await getDoc(ref);
+      setIsFavorite(snap.exists());
+    };
+
+    checkFavorite();
+  }, [favoriteDocId]);
+
+  const handleAddToFavorites = async () => {
+    if (!profileUserId || !currentUserId || isMyProfile) return;
+
+    const ref = doc(db, "favorites", `${currentUserId}_${profileUserId}`);
+
+    try {
+      if (isFavorite) {
+        await deleteDoc(ref);
+        setIsFavorite(false);
+      } else {
+        await setDoc(ref, {
+          fromUserId: currentUserId,
+          toUserId: profileUserId,
+          createdAt: serverTimestamp(),
+        });
+        await addDoc(collection(db, "notifications"), {
+          userId: profileUserId,
+          actorUserId: currentUserId,
+          actorName: auth.currentUser?.displayName || "Cultura member",
+          actorAvatar: auth.currentUser?.photoURL || "",
+          type: "favorite",
+          targetId: profileId,
+          text: null,
+          read: false,
+          createdAt: serverTimestamp(),
+        });
+        setIsFavorite(true);
+      }
+    } catch (e) {
+      console.error("Favorite error:", e);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50">
@@ -58,12 +119,12 @@ export function ProfileLayout({
             ) : isAuPair ? (
               <AuPairProfile
                 data={profile as AuPairProfileType | null}
-                onMessage={() => onMessageClick?.(profileId)}
+                onMessage={() => messageTargetUserId && onMessageClick?.(messageTargetUserId)}
               />
             ) : (
               <FamilyProfile
                 data={profile as FamilyProfileType | null}
-                onMessage={() => onMessageClick?.(profileId)}
+                onMessage={() => messageTargetUserId && onMessageClick?.(messageTargetUserId)}
               />
             )}
           </div>
@@ -76,13 +137,18 @@ export function ProfileLayout({
                 <Card className="p-6">
                   <h3 className="mb-4">Quick Actions</h3>
                   <div className="space-y-3">
-                    <Button className="w-full bg-pink-500 hover:bg-pink-600">
-                      <Heart className="w-4 h-4 mr-2" />
-                      Add to Favorites
+                    <Button
+                      className="w-full bg-pink-500 hover:bg-pink-600"
+                      onClick={handleAddToFavorites}
+                      disabled={!profileUserId || isMyProfile}
+                    >
+                      <Heart className={`w-4 h-4 mr-2 ${isFavorite ? "fill-white" : ""}`} />
+                      {isFavorite ? "Favorited" : "Add to Favorites"}
                     </Button>
                     <Button
                       className="w-full bg-blue-500 hover:bg-blue-600"
-                      onClick={() => onMessageClick?.(profileId)}
+                      onClick={() => messageTargetUserId && onMessageClick?.(messageTargetUserId)}
+                      disabled={!messageTargetUserId}
                     >
                       <MessageCircle className="w-4 h-4 mr-2" />
                       Send Message
@@ -101,50 +167,6 @@ export function ProfileLayout({
                   </div>
                 </Card>
 
-                {/* Match Score */}
-                <Card className="p-6">
-                  <h3 className="mb-4 flex items-center gap-2">
-                    <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                    Match Score
-                  </h3>
-                  <div className="text-center mb-4">
-                    <div className="text-5xl font-bold text-green-600 mb-2">
-                      85%
-                    </div>
-                    <p className="text-sm text-gray-600">Great Match!</p>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Languages</span>
-                      <Badge
-                        variant="secondary"
-                        className="bg-green-100 text-green-800"
-                      >
-                        ✓ Match
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">
-                        {isAuPair ? "Skills" : "Requirements"}
-                      </span>
-                      <Badge
-                        variant="secondary"
-                        className="bg-green-100 text-green-800"
-                      >
-                        ✓ Match
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">Duration</span>
-                      <Badge
-                        variant="secondary"
-                        className="bg-green-100 text-green-800"
-                      >
-                        ✓ Match
-                      </Badge>
-                    </div>
-                  </div>
-                </Card>
               </>
             )}
 

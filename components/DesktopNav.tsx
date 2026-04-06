@@ -1,88 +1,88 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { Bell, Settings, Users, User } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { Bell, Settings, LogOut, User, Heart, Users } from "lucide-react";
 
-interface DesktopNavProps {
-  onLogout?: () => void;
-  onOpenSettings?: () => void;
-  onOpenProfile?: () => void;
-  onOpenCommunity?: () => void;
+export interface DesktopNavProps {
+  onOpenSettings: () => void;
+  onOpenProfile: () => void;
+  onOpenCommunity: () => void;
   avatarUrl?: string;
+  hasUnreadNotifications?: boolean;
 }
 
 export function DesktopNav({
-  onLogout,
   onOpenSettings,
   onOpenProfile,
   onOpenCommunity,
   avatarUrl,
+  hasUnreadNotifications,
 }: DesktopNavProps) {
+  const router = useRouter();
+
   return (
-    <nav className="hidden lg:flex items-center gap-4">
-      {/* Community */}
-      <Button variant="ghost" size="icon" onClick={onOpenCommunity}>
-        <Users className="w-5 h-5" />
+    <nav
+      className="hidden items-center gap-1 lg:flex"
+      aria-label="Main navigation"
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="gap-2 text-gray-700 hover:bg-orange-50 hover:text-orange-800"
+        onClick={onOpenCommunity}
+      >
+        <Users className="h-4 w-4" />
+        Community
       </Button>
 
-      {/* Notifications */}
-      <Button variant="ghost" size="icon" className="relative">
-        <Bell className="w-5 h-5" />
-        <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="relative text-gray-700 hover:bg-orange-50 hover:text-orange-800"
+        onClick={() => router.push("/notifications")}
+        aria-label="Notifications"
+      >
+        <Bell className="h-5 w-5" />
+        {hasUnreadNotifications ? (
+          <span
+            className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white"
+            aria-hidden
+          />
+        ) : null}
       </Button>
 
-      {/* Favorites */}
-      <Button variant="ghost" size="icon">
-        <Heart className="w-5 h-5" />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-10 w-10 rounded-full text-gray-700 hover:bg-orange-50 hover:text-orange-800"
+        onClick={onOpenProfile}
+        aria-label="My profile"
+      >
+        <Avatar className="h-8 w-8 border border-orange-100">
+          {avatarUrl ? (
+            <AvatarImage src={avatarUrl} alt="" />
+          ) : null}
+          <AvatarFallback className="bg-orange-100 text-orange-800">
+            <User className="h-4 w-4" />
+          </AvatarFallback>
+        </Avatar>
       </Button>
 
-      {/* User Menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-            <Avatar>
-              <AvatarImage
-                src={
-                  avatarUrl ||
-                  "https://images.unsplash.com/photo-1704054006064-2c5b922e7a1e?w=100"
-                }
-              />
-              <AvatarFallback>ME</AvatarFallback>
-            </Avatar>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56" align="end" forceMount>
-          <DropdownMenuLabel className="font-normal">
-            <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none">My Account</p>
-              <p className="text-xs leading-none text-muted-foreground">
-                family@example.com
-              </p>
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onOpenProfile}>
-            <User className="mr-2 h-4 w-4" />
-            <span>Profile</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onOpenSettings}>
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Settings</span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onLogout}>
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>Log out</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="text-gray-700 hover:bg-orange-50 hover:text-orange-800"
+        onClick={onOpenSettings}
+        aria-label="Settings"
+      >
+        <Settings className="h-5 w-5" />
+      </Button>
     </nav>
   );
 }

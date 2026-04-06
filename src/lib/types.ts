@@ -21,6 +21,12 @@ export interface AuPairProfile {
     emoji?: string;
     level?: "beginner" | "intermediate" | "advanced";
   }[];
+  canTeach?: string[];
+  certifications?: string[];
+  personalityTraits?: string[];
+  experienceYears?: number | null;
+  childcareExperience?: boolean;
+  experienceDetails?: string;
   languages?: {
     primary?: {
       language: string;
@@ -33,6 +39,7 @@ export interface AuPairProfile {
   };
   experience?: { type: "childcare" | "other"; description: string }[];
   availability?: {
+    status?: string | null;
     availableFrom?: string | null;
     duration?: string | null;
     workingHoursType?: string;

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { ProfileEdit } from '@/components/ProfileEdit';
+import { FamilyProfileEdit } from '@/components/FamilyProfileEdit';
+import { AuPairProfileEdit } from '@/components/AuPairProfileEdit';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 import type { UserType } from '@/lib/types';
 
@@ -26,8 +27,11 @@ export default function ProfileEditPage() {
         const data = snap.data();
         setUserType(data.userType as UserType);
         if (data.profileRef) {
-          const [, id] = (data.profileRef as string).split('/');
-          setProfileId(id);
+          const rawProfileRef = data.profileRef as string;
+          const normalizedProfileId = rawProfileRef.includes('/')
+            ? rawProfileRef.split('/').pop() || null
+            : rawProfileRef;
+          setProfileId(normalizedProfileId);
         }
       } else {
         router.push('/profile-create');
@@ -51,7 +55,11 @@ export default function ProfileEditPage() {
 
   return (
     <div className='relative pb-16 lg:pb-0'>
-      <ProfileEdit userType={userType} profileId={profileId} onBack={handleBack} />
+      {userType === 'aupair' ? (
+        <AuPairProfileEdit profileId={profileId} onComplete={handleBack} />
+      ) : (
+        <FamilyProfileEdit profileId={profileId} onComplete={handleBack} />
+      )}
       <MobileBottomNav activeScreen='profile' onNavigate={handleMobileNavigation} />
     </div>
   );
