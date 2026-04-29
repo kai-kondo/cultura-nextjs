@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { db } from "@/lib/firebase";
+import { BabysitterCard } from "./BabysitterCard";
 
 // Minimal card-facing types (derived from FIREBASE_DATA_STRUCTURE.md)
 interface AuPairCardData {
@@ -120,10 +121,10 @@ export function Home({
   onOpenCommunity,
 }: HomeProps) {
   const [filterOpen, setFilterOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"aupair" | "family">(
-    userType === "family" ? "aupair" : "family"
-  );
+  const [activeTab, setActiveTab] = useState<"aupair" | "babysitter" | "family">(
 
+  userType === "family" ? "aupair" : "family"
+);
   // New filter states
   const [selectedNationality, setSelectedNationality] = useState("");
   const [selectedDesiredCountry, setSelectedDesiredCountry] = useState("");
@@ -172,7 +173,7 @@ export function Home({
             undefined,
           flag: p?.flag || undefined,
           imageUrl: p?.profileImage || p?.photos?.[0] || undefined,
-          type: p?.careType || p?.type || undefined,
+          type: p?.workType || p?.careType || p?.type || undefined,
           primaryLanguage: primaryLang
             ? {
                 code: String(primaryLang).toLowerCase(),
@@ -364,6 +365,16 @@ export function Home({
     selectedAvailability,
     selectedDays,
   ]);
+
+  const filteredRegularAuPairs = useMemo(
+    () => filteredAuPairs.filter((profile) => profile.type !== "babysitter"),
+    [filteredAuPairs]
+  );
+
+  const filteredBabysitters = useMemo(
+    () => filteredAuPairs.filter((profile) => profile.type === "babysitter"),
+    [filteredAuPairs]
+  );
 
   const filteredFamilies = useMemo(() => {
     return families.filter((family) => {
@@ -671,15 +682,25 @@ export function Home({
 
   const hasActiveFilters = activeFilters.length > 0;
   const resultCount =
-    activeTab === "aupair" ? filteredAuPairs.length : filteredFamilies.length;
+    activeTab === "aupair"
+      ? filteredRegularAuPairs.length
+      : activeTab === "babysitter"
+        ? filteredBabysitters.length
+        : filteredFamilies.length;
 
   const title =
-    activeTab === "aupair" ? "Available Au Pairs" : "Available Families";
+    activeTab === "aupair"
+      ? "Available Au Pairs"
+      : activeTab === "babysitter"
+        ? "Available Babysitters"
+        : "Available Families";
 
   const subtitle =
     activeTab === "aupair"
       ? "Find the perfect match for your family"
-      : "Find the perfect family for your cultural exchange";
+      : activeTab === "babysitter"
+        ? "Find trusted babysitters nearby"
+        : "Find the perfect family for your cultural exchange";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-amber-50">
@@ -1193,11 +1214,11 @@ export function Home({
         {/* Tab Switcher */}
         <Tabs
           value={activeTab}
-          onValueChange={(value) => setActiveTab(value as "aupair" | "family")}
+          onValueChange={(value) => setActiveTab(value as "aupair" | "babysitter" | "family")}
           className="w-full mb-6"
         >
           <div className="flex justify-center mb-6">
-            <TabsList className="grid w-full max-w-md grid-cols-2 bg-white/70 border border-orange-100">
+            <TabsList className="grid w-full max-w-2xl grid-cols-3 bg-white/70 border border-orange-100">
               <TabsTrigger
                 value="aupair"
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-rose-500 data-[state=active]:text-white"
@@ -1209,6 +1230,10 @@ export function Home({
                 className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-rose-500 data-[state=active]:text-white"
               >
                 {userType === "aupair" ? "Find Families" : "Browse Families"}
+              </TabsTrigger>
+              
+              <TabsTrigger value="babysitter">
+                Babysitters
               </TabsTrigger>
             </TabsList>
           </div>
@@ -1245,7 +1270,7 @@ export function Home({
                   </motion.div>
                 ))}
               </div>
-            ) : filteredAuPairs.length > 0 ? (
+            ) : filteredRegularAuPairs.length > 0 ? (
               <motion.div
                 className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
                 initial={{ opacity: 0 }}
@@ -1253,7 +1278,7 @@ export function Home({
                 transition={{ duration: 0.3 }}
               >
                 <AnimatePresence mode="popLayout">
-                  {filteredAuPairs.map((auPair, index) => (
+                  {filteredRegularAuPairs.map((auPair, index) => (
                     <motion.div
                       key={auPair.id}
                       initial={{ opacity: 0, scale: 0.9 }}
@@ -1361,6 +1386,108 @@ export function Home({
             )}
           </TabsContent>
 
+          <TabsContent value="babysitter">
+            <motion.div
+              className="mb-6"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <h2 className="text-gray-700">Available Babysitters</h2>
+              <p className="text-sm text-gray-500" id="babysitter-search-results-count">
+                Find trusted babysitters nearby
+                {hasActiveFilters &&
+                  ` • ${filteredBabysitters.length} result${
+                    filteredBabysitters.length !== 1 ? "s" : ""
+                  } found`}
+              </p>
+            </motion.div>
+
+            {isSearching ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {[1, 2, 3, 4].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="space-y-3 px-1 py-1 max-w-[320px] mx-auto w-full"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: i * 0.1 }}
+                  >
+                    <Skeleton className="h-56 w-full rounded-2xl" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </motion.div>
+                ))}
+              </div>
+            ) : filteredBabysitters.length > 0 ? (
+              <motion.div
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <AnimatePresence mode="popLayout">
+                  {filteredBabysitters.map((babysitter, index) => (
+                    <motion.div
+                      key={babysitter.id}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ delay: index * 0.05 }}
+                      layout
+                      className="px-1 py-1 max-w-[320px] mx-auto w-full"
+                    >
+                      <BabysitterCard
+                        name={babysitter.name}
+                        location={(babysitter as any).location || babysitter.nationality || ""}
+                        flag={babysitter.flag || ""}
+                        imageUrl={babysitter.imageUrl || ""}
+                        languages={[
+                          babysitter.primaryLanguage
+                            ? `${babysitter.primaryLanguage.name}${
+                                babysitter.primaryLanguage.level
+                                  ? ` (${babysitter.primaryLanguage.level})`
+                                  : ""
+                              }`
+                            : "",
+                          ...(babysitter.secondaryLanguages || []).map(
+                            (l) => `${l.name}${l.level ? ` (${l.level})` : ""}`
+                          ),
+                        ].filter(Boolean)}
+                        skills={(babysitter.skills || []).map((s) => ({
+                          emoji: s.emoji || "",
+                          name: s.name,
+                        }))}
+                        hourlyRate={(babysitter as any).hourlyRate}
+                        workingHoursType={(babysitter as any).workingHoursType}
+                        preferredDays={(babysitter as any).preferredDays || babysitter.workDays || []}
+                        maxTravelDistance={(babysitter as any).maxTravelDistance}
+                        availableFrom={babysitter.availableFrom || ""}
+                        onViewProfile={() => onViewProfile?.(babysitter.id)}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center py-16 bg-white/50 rounded-2xl border border-purple-100"
+              >
+                <motion.div
+                  className="text-6xl mb-4"
+                  animate={{ rotate: [0, 10, -10, 0] }}
+                  transition={{ duration: 1, repeat: Infinity, repeatDelay: 2 }}
+                >
+                  👶
+                </motion.div>
+                <h3 className="text-gray-700 mb-2">No babysitters found</h3>
+                <p className="text-gray-500 mb-6">
+                  Try adjusting your filters or checking back later
+                </p>
+              </motion.div>
+            )}
+          </TabsContent>
           <TabsContent value="family">
             <motion.div
               className="mb-6"

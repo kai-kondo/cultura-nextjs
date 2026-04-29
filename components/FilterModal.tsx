@@ -16,7 +16,7 @@ import { useState } from "react";
 interface FilterModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  filterType?: "aupair" | "family";
+  filterType?: "aupair" | "babysitter" | "family";
 }
 
 export function FilterModal({
