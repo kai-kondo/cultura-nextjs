@@ -10,6 +10,7 @@ import { auth, db } from "@/lib/firebase";
 import { addDoc, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, serverTimestamp, query, limit } from "firebase/firestore";
 import { FirebaseError } from "firebase/app";
 import AuPairProfile from "./AuPairProfile";
+import BabysitterProfile from "./BabysitterProfile";
 import { FamilyProfile } from "./FamilyProfile";
 import type {
   AuPairProfile as AuPairProfileType,
@@ -92,6 +93,7 @@ export function ProfileLayout({
   }, [profileId, userType]);
 
   const isAuPair = userType === "aupair";
+  const isBabysitter = isAuPair && (profile as any)?.workType === "babysitter";
   const currentUserId = auth.currentUser?.uid ?? null;
   const favoriteDocId = currentUserId && profileUserId ? `${currentUserId}_${profileUserId}` : null;
   const isMyProfile = Boolean(currentUserId && profileUserId && currentUserId === profileUserId);
@@ -183,6 +185,12 @@ export function ProfileLayout({
           <div className="lg:col-span-8">
             {loading ? (
               <Card className="p-6">Loading profile…</Card>
+            ) : isBabysitter ? (
+              <BabysitterProfile
+                data={profile}
+                onMessage={() => messageTargetUserId && onMessageClick?.(messageTargetUserId)}
+                onLike={handleAddToFavorites}
+              />
             ) : isAuPair ? (
               <AuPairProfile
                 data={profile as AuPairProfileType | null}
@@ -236,7 +244,7 @@ export function ProfileLayout({
             {/* Similar Profiles（Firestore-backed） */}
             <Card className="p-6">
               <h3 className="mb-4">
-                {isAuPair ? "Similar Au Pairs" : "Similar Families"}
+                {isBabysitter ? "Similar Babysitters" : isAuPair ? "Similar Au Pairs" : "Similar Families"}
               </h3>
               <div className="space-y-3">
                 {similarProfiles.length > 0 ? (
