@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import { CulturaLogo } from "./CulturaLogo";
 import { useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
-import { signInEmail, signInGoogle, signOutUser } from "@/lib/auth-actions";
+import { signInEmail } from "@/lib/auth-actions";
 import { db } from "@/lib/firebase";
 
 interface LoginProps {
@@ -15,7 +15,7 @@ interface LoginProps {
 }
 
 export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
-  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [showEmailForm] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,15 +35,18 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
       console.error("[Login] error raw:", err);
       console.error("[Login] code:", err?.code);
       console.error("[Login] message:", err?.message);
-      let message = "Something went wrong. Please try again.";
-      if (err.code === "auth/invalid-email") {
-        message = "Please enter a valid email address.";
-      } else if (err.code === "auth/user-not-found") {
-        message = "No account was found with that email address.";
-      } else if (err.code === "auth/wrong-password") {
-        message = "The password you entered is incorrect.";
-      } else if (err.code === "auth/too-many-requests") {
-        message = "Too many attempts. Please try again later.";
+
+      let message = "We couldn’t open your Cultura door just yet. Please try again.";
+      if (err?.code === "auth/invalid-email") {
+        message = "That email doesn’t look quite right. Please check it and try again.";
+      } else if (err?.code === "auth/user-not-found") {
+        message = "We couldn’t find your Cultura account yet.";
+      } else if (err?.code === "auth/wrong-password") {
+        message = "That password didn’t match. Give it another try.";
+      } else if (err?.code === "auth/invalid-credential") {
+        message = "We couldn’t match that email and password.";
+      } else if (err?.code === "auth/too-many-requests") {
+        message = "Too many tries for now. Take a short break and come back soon.";
       }
       setError(message);
     } finally {
@@ -51,57 +54,65 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
     }
   }
 
-  async function handleGoogleLogin() {
-    setError(null);
-    setLoading(true);
+  // Google login is intentionally disabled for the beta release.
+  // TODO: Re-enable after stabilizing Firebase OAuth, redirect domains, and user document checks.
+  // async function handleGoogleLogin() {
+  //   setError(null);
+  //   setLoading(true);
+  //
+  //   try {
+  //     const user = await signInGoogle("aupair", "login");
+  //
+  //     if (!user?.uid) {
+  //       setError("Google sign-in failed. Please try again.");
+  //       return;
+  //     }
+  //
+  //     const userSnap = await getDoc(doc(db, "users", user.uid));
+  //
+  //     if (!userSnap.exists()) {
+  //       await signOutUser();
+  //       window.location.href = "/signup";
+  //       return;
+  //     }
+  //
+  //     const userData = userSnap.data() as any;
+  //
+  //     if (userData?.isDeleted === true) {
+  //       await signOutUser();
+  //       setError("This account has been deleted and can no longer be used.");
+  //       return;
+  //     }
+  //
+  //     window.location.href = "/home";
+  //   } catch (err: any) {
+  //     console.error("[Google Login] error raw:", err);
+  //     console.error("[Google Login] code:", err?.code);
+  //     console.error("[Google Login] message:", err?.message);
+  //
+  //     let message = "Google sign-in failed. Please try again.";
+  //     if (err?.code === "auth/popup-closed-by-user") {
+  //       message = "Google sign-in was cancelled.";
+  //     } else if (err?.code === "auth/popup-blocked") {
+  //       message = "The popup was blocked. Please check your browser settings.";
+  //     } else if (err?.code === "auth/cancelled-popup-request") {
+  //       message = "Google sign-in was interrupted. Please try again.";
+  //     }
+  //
+  //     setError(message);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }
 
-    try {
-      const user = await signInGoogle("aupair", "login");
-
-      if (!user?.uid) {
-        setError("Google sign-in failed. Please try again.");
-        return;
-      }
-
-      const userSnap = await getDoc(doc(db, "users", user.uid));
-
-      // Login画面では、既存アカウントだけを通す。
-      // Firestore上にユーザードキュメントが無い場合は新規ユーザー扱いにして
-      // ログイン継続させず、Signupフローへ送る。
-      if (!userSnap.exists()) {
-        await signOutUser();
-        window.location.href = "/signup";
-        return;
-      }
-
-      const userData = userSnap.data() as any;
-
-      if (userData?.isDeleted === true) {
-        await signOutUser();
-        setError("This account has been deleted and can no longer be used.");
-        return;
-      }
-
-      window.location.href = "/home";
-    } catch (err: any) {
-      console.error("[Google Login] error raw:", err);
-      console.error("[Google Login] code:", err?.code);
-      console.error("[Google Login] message:", err?.message);
-
-      let message = "Google sign-in failed. Please try again.";
-      if (err?.code === "auth/popup-closed-by-user") {
-        message = "Google sign-in was cancelled.";
-      } else if (err?.code === "auth/popup-blocked") {
-        message = "The popup was blocked. Please check your browser settings.";
-      } else if (err?.code === "auth/cancelled-popup-request") {
-        message = "Google sign-in was interrupted. Please try again.";
-      }
-
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const isAccountNotFound = error === "We couldn’t find your Cultura account yet.";
+  const isWrongPassword =
+    error === "That password didn’t match. Give it another try." ||
+    error === "We couldn’t match that email and password.";
+  const isTooManyRequests =
+    error === "Too many tries for now. Take a short break and come back soon.";
+  const shouldShowLoginErrorModal =
+    isAccountNotFound || isWrongPassword || isTooManyRequests;
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden bg-gradient-to-br from-orange-50 via-amber-50 to-rose-50">
@@ -154,75 +165,20 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
               <p className="text-gray-600 leading-relaxed">
                 Meet trusted families and au pairs.
                 <br />
-                Start with Google or email to continue.
+                Sign in with email to continue.
               </p>
             </div>
 
             <Separator className="my-8" />
 
-            {/* Social Login */}
-            <div className="space-y-3">
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 }}
-              >
-                <Button
-                  variant="outline"
-                  aria-label="Continue with Google"
-                  disabled={loading}
-                  className="group relative w-full h-auto py-4 px-6 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm hover:shadow-md transition-all disabled:opacity-60"
-                  onClick={() => void handleGoogleLogin()}
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    />
-                  </svg>
-                  <span className="font-medium text-gray-700">
-                    {loading ? "Signing in..." : "Continue with Google"}
-                  </span>
-                </Button>
-              </motion.div>
+            {/* Email Login */}
 
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                <Button
-                  variant="outline"
-                  aria-label="Continue with Email"
-                  className="group relative w-full h-auto py-4 px-6 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shadow-sm hover:shadow-md transition-all"
-                  onClick={() => setShowEmailForm((v) => !v)}
-                >
-                  <Mail className="w-5 h-5 text-gray-600" />
-                  <span className="font-medium text-gray-700">
-                    Continue with Email
-                  </span>
-                </Button>
-              </motion.div>
-            </div>
-
-            {error && !showEmailForm ? (
+            {error && !showEmailForm && !shouldShowLoginErrorModal ? (
               <p className="mt-4 text-sm text-center text-red-500">{error}</p>
             ) : null}
 
             {showEmailForm && (
-              <form onSubmit={handleEmailLogin} className="mt-4 space-y-3">
+              <form onSubmit={handleEmailLogin} className="space-y-3">
                 <input
                   type="email"
                   required
@@ -239,7 +195,9 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
                   placeholder="Password"
                   className="w-full rounded-lg border border-gray-300 bg-white/90 p-3 outline-none focus:ring-2 focus:ring-orange-400"
                 />
-                {error && <p className="text-sm text-red-500">{error}</p>}
+                {error && !shouldShowLoginErrorModal ? (
+                  <p className="text-sm text-red-500">{error}</p>
+                ) : null}
                 <Button
                   type="submit"
                   disabled={loading}
@@ -250,12 +208,61 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
               </form>
             )}
 
-            <div className="relative my-6">
-              <Separator />
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-3 text-xs text-gray-500">
-                OR
-              </span>
-            </div>
+            {shouldShowLoginErrorModal ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl"
+                >
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100">
+                    <Mail className="h-6 w-6 text-orange-500" />
+                  </div>
+
+                  <h2 className="mb-2 text-lg font-semibold text-gray-800">
+                    {isAccountNotFound
+                      ? "We haven’t met you yet"
+                      : isTooManyRequests
+                        ? "Let’s pause for a moment"
+                        : "Almost there — just one detail off"}
+                  </h2>
+
+                  <p className="mb-5 text-sm leading-relaxed text-gray-600">
+                    {isAccountNotFound
+                      ? "This email isn’t connected to a Cultura account yet. Create one first and start your journey with us."
+                      : isTooManyRequests
+                        ? "For your safety, sign-in is taking a short break. Please try again a little later."
+                        : "The email and password didn’t match. Check your details and try again when you’re ready."}
+                  </p>
+
+                  <div className="space-y-3">
+                    {isAccountNotFound ? (
+                      <Button
+                        type="button"
+                        onClick={onSwitchToSignup}
+                        className="w-full h-11 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-rose-500 text-white shadow-md hover:from-orange-600 hover:via-amber-600 hover:to-rose-600"
+                      >
+                        Create your Cultura account
+                      </Button>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => setError(null)}
+                      className="text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      {isAccountNotFound
+                        ? "Try another email"
+                        : isTooManyRequests
+                          ? "Close"
+                          : "Try again"}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            ) : null}
+
 
             <p className="text-center text-xs text-gray-500 mt-2">
               By continuing, you agree to our Terms of Service and Privacy

@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { signUpEmail, signInGoogle, signOutUser } from "@/lib/auth-actions";
+import { signUpEmail } from "@/lib/auth-actions";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Separator } from "./ui/separator";
 import { Checkbox } from "./ui/checkbox";
-import { Mail, Eye, EyeOff, User, Lock } from "lucide-react";
+import { Mail, Eye, EyeOff, Lock } from "lucide-react";
 import { motion } from "motion/react";
 import { CulturaLogo } from "./CulturaLogo";
 
@@ -20,7 +20,6 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    name: "",
     email: "",
     password: "",
     agreedToTerms: false
@@ -28,52 +27,74 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.agreedToTerms) return;
-    setError(null);
-    try {
-      await signUpEmail(formData.email, formData.password, "aupair", formData.name);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("userType");
-      }
-      onSignupComplete?.();
-    } catch (err: any) {
-      setError(err?.message || "Signup failed. Please try again.");
-    }
-  };
-
-  const handleSocialSignup = async (provider: string) => {
-    if (provider !== "google") return;
+    if (!formData.agreedToTerms || loading) return;
 
     setLoading(true);
     setError(null);
+
     try {
-      await signInGoogle(undefined, "signup");
+      await signUpEmail(formData.email, formData.password, "aupair");
       if (typeof window !== "undefined") {
         localStorage.removeItem("userType");
       }
       onSignupComplete?.();
     } catch (err: any) {
-      console.error("[Google Signup] error raw:", err);
-      console.error("[Google Signup] code:", err?.code);
-      console.error("[Google Signup] message:", err?.message);
+      let message = "Signup failed. Please try again.";
 
-      let message = "Google sign-in failed. Please try again.";
-      if (err?.code === "auth/account-already-exists") {
-        message = "An account already exists. Please log in.";
-      } else if (err?.code === "auth/popup-closed-by-user") {
-        message = "Google sign-in was cancelled.";
-      } else if (err?.code === "auth/popup-blocked") {
-        message = "The popup was blocked. Please check your browser settings.";
-      } else if (err?.code === "auth/cancelled-popup-request") {
-        message = "Google sign-in was interrupted. Please try again.";
+      if (err?.code === "auth/email-already-in-use") {
+        message = "This email is already registered. Please log in instead.";
+      } else if (err?.code === "auth/invalid-email") {
+        message = "Please enter a valid email address.";
+      } else if (err?.code === "auth/weak-password") {
+        message = "Password is too weak. Please use at least 6 characters.";
+      } else if (err?.message) {
+        message = err.message;
       }
 
-      await signOutUser().catch(() => undefined);
       setError(message);
     } finally {
       setLoading(false);
     }
   };
+
+  const isEmailAlreadyRegistered =
+    error === "This email is already registered. Please log in instead.";
+
+  // Google signup is intentionally disabled for the beta release.
+  // TODO: Re-enable after stabilizing Firebase OAuth settings, redirect domains, and profile type handling.
+  // const handleSocialSignup = async (provider: string) => {
+  //   if (provider !== "google") return;
+  //
+  //   setLoading(true);
+  //   setError(null);
+  //   try {
+  //     await signInGoogle(undefined, "signup");
+  //     if (typeof window !== "undefined") {
+  //       localStorage.removeItem("userType");
+  //     }
+  //     onSignupComplete?.();
+  //   } catch (err: any) {
+  //     console.error("[Google Signup] error raw:", err);
+  //     console.error("[Google Signup] code:", err?.code);
+  //     console.error("[Google Signup] message:", err?.message);
+  //
+  //     let message = "Google sign-in failed. Please try again.";
+  //     if (err?.code === "auth/account-already-exists") {
+  //       message = "An account already exists. Please log in.";
+  //     } else if (err?.code === "auth/popup-closed-by-user") {
+  //       message = "Google sign-in was cancelled.";
+  //     } else if (err?.code === "auth/popup-blocked") {
+  //       message = "The popup was blocked. Please check your browser settings.";
+  //     } else if (err?.code === "auth/cancelled-popup-request") {
+  //       message = "Google sign-in was interrupted. Please try again.";
+  //     }
+  //
+  //     await signOutUser().catch(() => undefined);
+  //     setError(message);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden bg-gradient-to-br from-orange-50 via-amber-50 to-rose-50">
@@ -133,24 +154,6 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
             {/* Sign Up Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-                <Label htmlFor="name" className="text-sm text-gray-700 mb-2 block">
-                  Full Name
-                </Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="Your name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="pl-10 h-12 rounded-xl border-gray-200 focus:border-orange-500"
-                    required
-                  />
-                </div>
-              </motion.div>
-
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                 <Label htmlFor="email" className="text-sm text-gray-700 mb-2 block">
                   Email Address
                 </Label>
@@ -168,7 +171,7 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                 </div>
               </motion.div>
 
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                 <Label htmlFor="password" className="text-sm text-gray-700 mb-2 block">
                   Password
                 </Label>
@@ -196,7 +199,7 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
+                transition={{ delay: 0.25 }}
                 className="flex items-start gap-2 pt-2"
               >
                 <Checkbox
@@ -219,7 +222,7 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                 </Label>
               </motion.div>
 
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                 <Button
                   type="submit"
                   disabled={!formData.agreedToTerms || loading}
@@ -230,6 +233,8 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
               </motion.div>
             </form>
 
+            {/* Google signup is intentionally hidden for the beta release. */}
+            {/*
             <div className="relative my-6">
               <Separator />
               <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-3 text-xs text-gray-500">
@@ -237,7 +242,6 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
               </span>
             </div>
 
-            {/* Social Sign Up */}
             <div className="space-y-3">
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
                 <Button
@@ -270,22 +274,48 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                   </span>
                 </Button>
               </motion.div>
-
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled
-                  className="w-full h-12 flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white shadow-sm opacity-60"
-                >
-                  <Mail className="w-5 h-5 text-gray-600" />
-                  <span className="text-gray-700">Continue with Email</span>
-                </Button>
-              </motion.div>
             </div>
+            */}
 
-            {error ? (
+            {error && !isEmailAlreadyRegistered ? (
               <p className="mt-4 text-sm text-center text-red-500">{error}</p>
+            ) : null}
+
+            {isEmailAlreadyRegistered ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl"
+                >
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100">
+                    <Mail className="h-6 w-6 text-orange-500" />
+                  </div>
+                  <h2 className="mb-2 text-lg font-semibold text-gray-800">
+                    Looks like you’re already part of Cultura
+                  </h2>
+                  <p className="mb-5 text-sm leading-relaxed text-gray-600">
+                    This email is already connected to an account. Log in to continue your journey.
+                  </p>
+                  <div className="space-y-3">
+                    <Button
+                      type="button"
+                      onClick={onSwitchToLogin}
+                      className="w-full h-11 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-rose-500 text-white shadow-md hover:from-orange-600 hover:via-amber-600 hover:to-rose-600"
+                    >
+                      Log in and continue
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setError(null)}
+                      className="text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      Use a different email
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
             ) : null}
 
             {/* Switch to Login */}

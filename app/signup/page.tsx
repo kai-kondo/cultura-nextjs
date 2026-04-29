@@ -6,7 +6,8 @@ import { Signup } from '@/components/Signup';
 export default function SignupPage() {
   const router = useRouter();
 
-  const handleSignupComplete = (type: 'family' | 'aupair') => {
+  const handleSignupComplete = () => {
+    const type: 'family' | 'aupair' = 'aupair';
     localStorage.setItem('userType', type);
     router.push('/profile-create');
   };

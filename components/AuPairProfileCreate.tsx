@@ -53,6 +53,9 @@ interface AuPairProfileFormData {
   availableFrom: string;
   duration: string;
   preferredLocations: string[];
+  preferredDays: string[];
+  workingHoursType: "fulltime" | "parttime" | "hourly" | "flexible";
+  maxTravelDistance: string;
   workType: "aupair" | "babysitter";
   hourlyRate: string;
 }
@@ -74,9 +77,12 @@ const emptyAuPairProfileFormData: AuPairProfileFormData = {
   availableFrom: "",
   duration: "",
   preferredLocations: [],
+  preferredDays: [],
+  workingHoursType: "fulltime",
+  maxTravelDistance: "",
   workType: "aupair",
   hourlyRate: "",
-};
+  };
 
 interface AuPairProfileCreateProps {
   onComplete: () => void;
@@ -112,6 +118,7 @@ export function AuPairProfileCreate({
     level: "Intermediate",
   });
   const [newLocation, setNewLocation] = useState("");
+  const dayOptions = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const [profileId, setProfileId] = useState<string | null>(initialProfileId);
 
@@ -272,9 +279,22 @@ export function AuPairProfileCreate({
       await patchAuPairProfile(ensuredId, {
         availability: {
           availableFrom: profileData.availableFrom || null,
-          duration: profileData.duration || null,
-          workingHoursType: "fulltime",
-          preferredDays: [],
+          duration:
+            profileData.workType === "aupair"
+              ? profileData.duration || null
+              : null,
+          workingHoursType:
+            profileData.workType === "babysitter"
+              ? profileData.workingHoursType ?? "hourly"
+              : "fulltime",
+          preferredDays:
+            profileData.workType === "babysitter"
+              ? profileData.preferredDays ?? []
+              : [],
+          maxTravelDistance:
+            profileData.workType === "babysitter" && profileData.maxTravelDistance
+              ? Number(profileData.maxTravelDistance)
+              : null,
         },
         desiredCountries,
       });
@@ -401,6 +421,14 @@ export function AuPairProfileCreate({
       ),
     });
   };
+  const togglePreferredDay = (day: string) => {
+    setProfileData((prev) => ({
+      ...prev,
+      preferredDays: prev.preferredDays.includes(day)
+        ? prev.preferredDays.filter((d) => d !== day)
+        : [...prev.preferredDays, day],
+    }));
+  };
 
   const handleNext = async () => {
     // 保存（現在のステップのデータをFirestoreへ）
@@ -462,6 +490,8 @@ export function AuPairProfileCreate({
                           ...profileData,
                           workType: "aupair",
                           hourlyRate: "",
+                          workingHoursType: "fulltime",
+                          maxTravelDistance: "",
                         })
                       }
                       className={`flex-1 rounded-lg px-4 py-2 border transition ${
@@ -479,6 +509,8 @@ export function AuPairProfileCreate({
                         setProfileData({
                           ...profileData,
                           workType: "babysitter",
+                          duration: "",
+                          workingHoursType: "hourly",
                         })
                       }
                       className={`flex-1 rounded-lg px-4 py-2 border transition ${
@@ -583,24 +615,50 @@ export function AuPairProfileCreate({
                   </div>
 
                   {profileData.workType === "babysitter" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="hourlyRate">Hourly Rate *</Label>
-                      <Input
-                        id="hourlyRate"
-                        type="number"
-                        min="0"
-                        value={profileData.hourlyRate}
-                        onChange={(e) =>
-                          setProfileData({
-                            ...profileData,
-                            hourlyRate: e.target.value,
-                          })
-                        }
-                        placeholder="e.g. 25"
-                      />
-                      <p className="text-sm text-gray-500">
-                        Enter your expected hourly rate in your local currency.
-                      </p>
+                    <div className="space-y-4 rounded-xl border-2 border-orange-200 bg-orange-50 p-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="hourlyRate" className="text-orange-700">
+                          Hourly Rate *
+                        </Label>
+                        <Input
+                          id="hourlyRate"
+                          type="number"
+                          min="0"
+                          value={profileData.hourlyRate}
+                          onChange={(e) =>
+                            setProfileData({
+                              ...profileData,
+                              hourlyRate: e.target.value,
+                            })
+                          }
+                          placeholder="e.g. 25"
+                          className="bg-white"
+                        />
+                        <p className="text-sm text-orange-700">
+                          Babysitting is usually hourly, so families need to know your expected rate.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="workingHoursType" className="text-orange-700">
+                          Working Style *
+                        </Label>
+                        <select
+                          id="workingHoursType"
+                          value={profileData.workingHoursType}
+                          onChange={(e) =>
+                            setProfileData({
+                              ...profileData,
+                              workingHoursType: e.target.value as AuPairProfileFormData["workingHoursType"],
+                            })
+                          }
+                          className="w-full rounded-md border bg-white px-3 py-2"
+                        >
+                          <option value="hourly">Hourly</option>
+                          <option value="parttime">Part-time</option>
+                          <option value="flexible">Flexible</option>
+                        </select>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -960,7 +1018,11 @@ export function AuPairProfileCreate({
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Preferred Locations</Label>
+                    <Label>
+                      {profileData.workType === "babysitter"
+                        ? "Preferred Work Areas"
+                        : "Preferred Locations"}
+                    </Label>
                     <div className="flex gap-2">
                       <Input
                         value={newLocation}
@@ -969,7 +1031,11 @@ export function AuPairProfileCreate({
                           e.key === "Enter" &&
                           (e.preventDefault(), addLocation())
                         }
-                        placeholder="e.g., New York, Tokyo"
+                        placeholder={
+                          profileData.workType === "babysitter"
+                            ? "e.g., Shibuya, Tokyo"
+                            : "e.g., Paris, France"
+                        }
                       />
                       <Button onClick={addLocation} variant="outline">
                         Add
