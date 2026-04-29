@@ -31,7 +31,7 @@ type Props = {
 
 export function FamilyProfile({ data, onLike, onMessage }: Props) {
   const gallery = data?.galleryImages ?? [];
-  const avatar = data?.profileImage || "/placeholder-avatar.png";
+  const avatar = data?.profileImage || "/placeholder-avatar.svg";
 
   const familyName = data?.familyName || "Unnamed Family";
   const city = data?.location?.city;
@@ -125,9 +125,9 @@ export function FamilyProfile({ data, onLike, onMessage }: Props) {
 
               {infoChips.length > 0 && (
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  {infoChips.map((chip) => (
+                  {infoChips.map((chip, index) => (
                     <span
-                      key={chip}
+                      key={`${chip}-${index}`}
                       className="rounded-full border border-orange-200 bg-white/80 px-3 py-1 text-sm text-gray-700"
                     >
                       {chip}

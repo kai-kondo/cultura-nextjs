@@ -4,18 +4,39 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Community } from '@/components/Community';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 
 export default function CommunityPage() {
   const router = useRouter();
   const [userType, setUserType] = useState<'family' | 'aupair' | null>(null);
 
   useEffect(() => {
-    const type = localStorage.getItem('userType') as 'family' | 'aupair' | null;
-    if (!type) {
-      router.push('/');
-      return;
-    }
-    setUserType(type);
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        router.push('/');
+        return;
+      }
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (!snap.exists()) {
+        router.push('/profile-create');
+        return;
+      }
+      const data = snap.data() as { userType?: 'family' | 'aupair'; profileRef?: string | null };
+      let type = data.userType ?? null;
+      if (!type && data.profileRef) {
+        if (data.profileRef.startsWith('auPairProfiles/')) type = 'aupair';
+        if (data.profileRef.startsWith('familyProfiles/')) type = 'family';
+      }
+      if (!type) {
+        router.push('/profile-create');
+        return;
+      }
+      setUserType(type);
+      localStorage.setItem('userType', type);
+    });
+    return () => unsub();
   }, [router]);
 
   const handleOpenSettings = () => {

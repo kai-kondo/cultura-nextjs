@@ -1,17 +1,28 @@
+'use client';
+
 import { Home, Users, MessageCircle, User } from "lucide-react";
+
+import { useRouter } from 'next/navigation';
 
 interface MobileBottomNavProps {
   activeScreen: string;
-  onNavigate: (screen: "home" | "community" | "messages" | "profile") => void;
+  onNavigate?: (screen: "home" | "community" | "messages" | "profile") => void;
 }
 
 export function MobileBottomNav({ activeScreen, onNavigate }: MobileBottomNavProps) {
+  const router = useRouter();
   const navItems = [
     { id: "home", icon: Home, label: "Home" },
     { id: "community", icon: Users, label: "Community" },
     { id: "messages", icon: MessageCircle, label: "Messages" },
     { id: "profile", icon: User, label: "Profile" },
   ];
+  const routeMap: Record<"home" | "community" | "messages" | "profile", string> = {
+    home: "/home",
+    community: "/community",
+    messages: "/messages",
+    profile: "/profile/edit",
+  };
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg">
@@ -23,7 +34,14 @@ export function MobileBottomNav({ activeScreen, onNavigate }: MobileBottomNavPro
           return (
             <button
               key={item.id}
-              onClick={() => onNavigate(item.id as any)}
+              onClick={() => {
+                const nextScreen = item.id as "home" | "community" | "messages" | "profile";
+                if (onNavigate) {
+                  onNavigate(nextScreen);
+                  return;
+                }
+                router.push(routeMap[nextScreen]);
+              }}
               className={`
                 flex flex-col items-center justify-center flex-1 h-full
                 transition-all duration-200 ease-in-out

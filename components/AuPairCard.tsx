@@ -31,7 +31,7 @@ export function AuPairCard({
   // Defensive fallbacks
   const displayName = name && name.trim().length > 0 ? name : "Unnamed";
   const initials = (name || "").slice(0, 2).toUpperCase() || "--";
-  const photo = imageUrl && imageUrl.trim().length > 0 ? imageUrl : "/placeholder-avatar.png";
+  const photo = imageUrl && imageUrl.trim().length > 0 ? imageUrl : "/placeholder-avatar.svg";
   const displayCountry = country || "";
   const displayFlag = flag || "";
   const displayLanguages = (languages && languages.length > 0) ? languages.join(", ") : "—";

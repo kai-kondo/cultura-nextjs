@@ -6,7 +6,7 @@ import { MessageCircle } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Toaster } from '@/components/ui/sonner';
 
-const HIDE_GLOBAL_UI_PATHS = new Set(['/', '/signup']);
+const HIDE_GLOBAL_UI_PATHS = new Set(['/', '/signup', '/profile-create']);
 
 type AppShellProps = {
   children: ReactNode;

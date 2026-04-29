@@ -336,7 +336,7 @@ export function ProfileSettings({ userType, profileId, onClose, onLogout }: Prof
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6">
                     <div className="relative group">
                       <Avatar className="h-24 w-24">
-                        <AvatarImage src={avatarURL || "/placeholder-avatar.png"} />
+                        <AvatarImage src={avatarURL || "/placeholder-avatar.svg"} />
                         <AvatarFallback>{name.slice(0, 2).toUpperCase() || "--"}</AvatarFallback>
                       </Avatar>
                       <Button size="icon" className="absolute bottom-0 right-0 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={handleAvatarClick}>
@@ -422,8 +422,8 @@ export function ProfileSettings({ userType, profileId, onClose, onLogout }: Prof
                       Languages
                     </h3>
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {languages.map((lang) => (
-                        <Badge key={lang} variant="secondary" className="gap-1 pr-1">
+                      {languages.map((lang, index) => (
+                        <Badge key={`${lang}-${index}`} variant="secondary" className="gap-1 pr-1">
                           {lang}
                           <button onClick={() => removeLanguage(lang)} className="ml-1 hover:bg-gray-300 rounded-full p-0.5">
                             <X className="w-3 h-3" />
@@ -443,8 +443,8 @@ export function ProfileSettings({ userType, profileId, onClose, onLogout }: Prof
                   <div className="space-y-4">
                     <h3 className="text-gray-900">Skills & Interests</h3>
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {skills.map((skill) => (
-                        <Badge key={skill} className="gap-1 pr-1 bg-gradient-to-r from-orange-500 to-rose-600">
+                      {skills.map((skill, index) => (
+                        <Badge key={`${skill}-${index}`} className="gap-1 pr-1 bg-gradient-to-r from-orange-500 to-rose-600">
                           {skill}
                           <button onClick={() => removeSkill(skill)} className="ml-1 hover:bg-white/20 rounded-full p-0.5">
                             <X className="w-3 h-3" />

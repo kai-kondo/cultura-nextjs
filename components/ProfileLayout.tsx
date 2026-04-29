@@ -8,6 +8,7 @@ import { Badge } from "./ui/badge";
 import { Heart, MessageCircle, Share2, Flag, Star } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { addDoc, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, serverTimestamp, query, limit } from "firebase/firestore";
+import { FirebaseError } from "firebase/app";
 import AuPairProfile from "./AuPairProfile";
 import { FamilyProfile } from "./FamilyProfile";
 import type {
@@ -104,9 +105,17 @@ export function ProfileLayout({
     if (!favoriteDocId) return;
 
     const checkFavorite = async () => {
-      const ref = doc(db, "favorites", favoriteDocId);
-      const snap = await getDoc(ref);
-      setIsFavorite(snap.exists());
+      try {
+        const ref = doc(db, "favorites", favoriteDocId);
+        const snap = await getDoc(ref);
+        setIsFavorite(snap.exists());
+      } catch (e) {
+        // Keep UI usable even when rules temporarily block read.
+        setIsFavorite(false);
+        if (!(e instanceof FirebaseError && e.code === "permission-denied")) {
+          console.error("Favorite check error:", e);
+        }
+      }
     };
 
     checkFavorite();

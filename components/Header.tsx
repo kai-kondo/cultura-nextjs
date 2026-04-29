@@ -7,6 +7,7 @@ import { auth } from "@/lib/firebase";
 import { listenNotifications } from "@/lib/notification-actions";
 import { DesktopNav } from "./DesktopNav";
 import { CulturaLogo } from "./CulturaLogo";
+import { Settings, Bell } from "lucide-react";
 
 interface HeaderProps {
   onOpenSettings?: () => void;
@@ -51,6 +52,10 @@ export function Header({
       return;
     }
     router.push("/community");
+  };
+
+  const handleOpenNotifications = () => {
+    router.push("/notifications");
   };
 
   useEffect(() => {
@@ -108,7 +113,30 @@ export function Header({
             </div>
           </button>
 
-          <div className="flex items-center rounded-[22px] border border-orange-100/70 bg-white/75 px-2 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-sm">
+          <div className="flex items-center gap-2 lg:hidden">
+            <button
+              type="button"
+              onClick={handleOpenNotifications}
+              aria-label="Open notifications"
+              className="relative flex h-11 w-11 items-center justify-center rounded-full border border-orange-100/80 bg-white/80 text-slate-700 shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all hover:-translate-y-[1px] hover:border-orange-200 hover:bg-white hover:text-orange-700"
+            >
+              <Bell className="h-5 w-5" />
+              {hasUnreadNotifications && (
+                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenSettings}
+              aria-label="Open settings"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-orange-100/80 bg-white/80 text-slate-700 shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all hover:-translate-y-[1px] hover:border-orange-200 hover:bg-white hover:text-orange-700"
+            >
+              <Settings className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="hidden lg:flex items-center rounded-[22px] border border-orange-100/70 bg-white/75 px-2 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-sm">
             <DesktopNav
               onOpenSettings={handleOpenSettings}
               onOpenProfile={handleOpenMyProfile}

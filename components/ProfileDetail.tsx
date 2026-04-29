@@ -16,6 +16,7 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 interface AuPairDataVM {
   type: "aupair";
   id: string;
+  ownerUserId: string;
   name: string;
   age: number;
   country: string;
@@ -33,6 +34,7 @@ interface AuPairDataVM {
 interface FamilyDataVM {
   type: "family";
   id: string;
+  ownerUserId: string;
   name: string;
   location: string;
   flag: string;
@@ -52,16 +54,19 @@ interface ProfileDetailProps {
   userType: "aupair" | "family";
   profileId: string;
   onMessageClick?: (profileId: string) => void;
+  onLikeClick?: (profileId: string, userType: "aupair" | "family") => void;
 }
 
 // Firebase
-import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, where } from "firebase/firestore";
 
-export function ProfileDetail({ userType, profileId, onMessageClick }: ProfileDetailProps) {
+export function ProfileDetail({ userType, profileId, onMessageClick, onLikeClick }: ProfileDetailProps) {
   const [profile, setProfile] = useState<ProfileDataVM | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
+  const [isLiked, setIsLiked] = useState(false);
+  const [isLikeSaving, setIsLikeSaving] = useState(false);
 
   // Default gallery fallbacks
   const defaultAuPairGallery = useMemo(() => [
@@ -120,6 +125,7 @@ export function ProfileDetail({ userType, profileId, onMessageClick }: ProfileDe
         const vm: AuPairDataVM = {
           type: "aupair",
           id: snap.id,
+          ownerUserId: p?.userId || "",
           name: p?.name || "",
           age: calcAge(p?.birthDate),
           country: country,
@@ -145,6 +151,7 @@ export function ProfileDetail({ userType, profileId, onMessageClick }: ProfileDe
         const vm: FamilyDataVM = {
           type: "family",
           id: snap.id,
+          ownerUserId: p?.userId || "",
           name: p?.familyName || p?.name || "",
           location: [city, country].filter(Boolean).join(", "),
           flag: p?.flag || "",
@@ -164,6 +171,25 @@ export function ProfileDetail({ userType, profileId, onMessageClick }: ProfileDe
         };
         setProfile(vm);
       }
+  useEffect(() => {
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid || !profile?.ownerUserId || currentUid === profile.ownerUserId) {
+      setIsLiked(false);
+      return;
+    }
+
+    const q = query(
+      collection(db, "favorites"),
+      where("fromUserId", "==", currentUid),
+      where("toUserId", "==", profile.ownerUserId)
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      setIsLiked(!snapshot.empty);
+    });
+
+    return () => unsub();
+  }, [profile?.ownerUserId]);
 
       setLoading(false);
     });
@@ -176,6 +202,33 @@ export function ProfileDetail({ userType, profileId, onMessageClick }: ProfileDe
   };
   const handleNextImage = (galleryLength: number) => {
     if (selectedImage !== null && selectedImage < galleryLength - 1) setSelectedImage(selectedImage + 1);
+  };
+
+  const handleLikeClick = async () => {
+    if (!profile) return;
+
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid || !profile.ownerUserId || currentUid === profile.ownerUserId || isLiked || isLikeSaving) {
+      return;
+    }
+
+    setIsLikeSaving(true);
+    try {
+      await addDoc(collection(db, "favorites"), {
+        fromUserId: currentUid,
+        toUserId: profile.ownerUserId,
+        createdAt: serverTimestamp(),
+      });
+      setIsLiked(true);
+      onLikeClick?.(profile.id, profile.type);
+    } finally {
+      setIsLikeSaving(false);
+    }
+  };
+
+  const handleMessageAction = () => {
+    if (!profile) return;
+    onMessageClick?.(profile.id);
   };
 
   if (loading) return <Card className="p-6">Loading profile…</Card>;
@@ -312,10 +365,20 @@ export function ProfileDetail({ userType, profileId, onMessageClick }: ProfileDe
 
           {/* Actions */}
           <div className="p-6 flex gap-3">
-            <Button className="flex-1 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700">
-              <Heart className="w-4 h-4 mr-2" /> Like
+            <Button
+              type="button"
+              className="flex-1 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700"
+              onClick={() => void handleLikeClick()}
+              disabled={isLiked || isLikeSaving || !profile.ownerUserId || auth.currentUser?.uid === profile.ownerUserId}
+            >
+              <Heart className="w-4 h-4 mr-2" /> {isLiked ? "Liked" : isLikeSaving ? "Saving..." : "Like"}
             </Button>
-            <Button className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700" onClick={() => onMessageClick?.(profile.id)}>
+            <Button
+              type="button"
+              className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700"
+              onClick={handleMessageAction}
+              disabled={!onMessageClick}
+            >
               <MessageCircle className="w-4 h-4 mr-2" /> Message
             </Button>
           </div>
@@ -476,10 +539,20 @@ export function ProfileDetail({ userType, profileId, onMessageClick }: ProfileDe
         <Separator />
 
         <div className="p-6 flex gap-3">
-          <Button className="flex-1 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700">
-            <Heart className="w-4 h-4 mr-2" /> Like
+          <Button
+            type="button"
+            className="flex-1 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700"
+            onClick={() => void handleLikeClick()}
+            disabled={isLiked || isLikeSaving || !profile.ownerUserId || auth.currentUser?.uid === profile.ownerUserId}
+          >
+            <Heart className="w-4 h-4 mr-2" /> {isLiked ? "Liked" : isLikeSaving ? "Saving..." : "Like"}
           </Button>
-          <Button className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700" onClick={() => onMessageClick?.(profile.id)}>
+          <Button
+            type="button"
+            className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700"
+            onClick={handleMessageAction}
+            disabled={!onMessageClick}
+          >
             <MessageCircle className="w-4 h-4 mr-2" /> Message
           </Button>
         </div>

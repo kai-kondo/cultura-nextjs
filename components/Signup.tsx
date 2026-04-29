@@ -1,27 +1,24 @@
 import { useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { signUpEmail, signInGoogle } from "@/lib/auth-actions";
-import { db } from "@/lib/firebase";
+import { signUpEmail, signInGoogle, signOutUser } from "@/lib/auth-actions";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Separator } from "./ui/separator";
 import { Checkbox } from "./ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Mail, Eye, EyeOff, User, Lock } from "lucide-react";
 import { motion } from "motion/react";
 import { CulturaLogo } from "./CulturaLogo";
 
 interface SignupProps {
-  onSignupComplete?: (type: "family" | "aupair") => void;
+  onSignupComplete?: () => void;
   onSwitchToLogin?: () => void;
 }
 
 export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
-  const [userType, setUserType] = useState<"family" | "aupair">("aupair");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -32,14 +29,15 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.agreedToTerms) return;
+    setError(null);
     try {
-      await signUpEmail(formData.email, formData.password, userType, formData.name);
+      await signUpEmail(formData.email, formData.password, "aupair", formData.name);
       if (typeof window !== "undefined") {
-        localStorage.setItem("userType", userType);
+        localStorage.removeItem("userType");
       }
-      onSignupComplete?.(userType);
+      onSignupComplete?.();
     } catch (err: any) {
-      alert(err?.message || "Signup failed. Please try again.");
+      setError(err?.message || "Signup failed. Please try again.");
     }
   };
 
@@ -47,32 +45,31 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
     if (provider !== "google") return;
 
     setLoading(true);
+    setError(null);
     try {
-      const user = await signInGoogle(userType);
-      const snap = await getDoc(doc(db, "users", user.uid));
-      const resolvedUserType =
-        (snap.exists() && ((snap.data() as any).userType as "family" | "aupair")) ||
-        userType;
-
+      await signInGoogle(undefined, "signup");
       if (typeof window !== "undefined") {
-        localStorage.setItem("userType", resolvedUserType);
+        localStorage.removeItem("userType");
       }
-      onSignupComplete?.(resolvedUserType);
+      onSignupComplete?.();
     } catch (err: any) {
       console.error("[Google Signup] error raw:", err);
       console.error("[Google Signup] code:", err?.code);
       console.error("[Google Signup] message:", err?.message);
 
-      let message = "Google認証に失敗しました。もう一度お試しください。";
-      if (err?.code === "auth/popup-closed-by-user") {
-        message = "Google認証がキャンセルされました。";
+      let message = "Google sign-in failed. Please try again.";
+      if (err?.code === "auth/account-already-exists") {
+        message = "An account already exists. Please log in.";
+      } else if (err?.code === "auth/popup-closed-by-user") {
+        message = "Google sign-in was cancelled.";
       } else if (err?.code === "auth/popup-blocked") {
-        message = "ポップアップがブロックされました。ブラウザ設定をご確認ください。";
+        message = "The popup was blocked. Please check your browser settings.";
       } else if (err?.code === "auth/cancelled-popup-request") {
-        message = "Google認証が中断されました。もう一度お試しください。";
+        message = "Google sign-in was interrupted. Please try again.";
       }
 
-      alert(message);
+      await signOutUser().catch(() => undefined);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -126,51 +123,10 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                 Join Cultura
               </h1>
               <p className="text-sm text-gray-600">
-                Start your cultural exchange journey
+                Create your account first, then choose your profile type in the next step
               </p>
             </div>
 
-            {/* User Type Selection */}
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="mb-6"
-            >
-              <Label className="text-sm text-gray-700 mb-3 block">I am a...</Label>
-              <RadioGroup
-                value={userType}
-                onValueChange={(value) => {
-                  const nextType = value as "family" | "aupair";
-                  setUserType(nextType);
-                  if (typeof window !== "undefined") {
-                    localStorage.setItem("userType", nextType);
-                  }
-                }}
-                className="grid grid-cols-2 gap-3"
-              >
-                <div>
-                  <RadioGroupItem value="aupair" id="aupair" className="peer sr-only" />
-                  <Label
-                    htmlFor="aupair"
-                    className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-4 hover:bg-gray-50 peer-data-[state=checked]:border-orange-500 peer-data-[state=checked]:bg-orange-50 cursor-pointer transition-all"
-                  >
-                    <span className="text-2xl mb-2">👤</span>
-                    <span className="text-sm">Au Pair</span>
-                  </Label>
-                </div>
-                <div>
-                  <RadioGroupItem value="family" id="family" className="peer sr-only" />
-                  <Label
-                    htmlFor="family"
-                    className="flex flex-col items-center justify-center rounded-xl border-2 border-gray-200 bg-white p-4 hover:bg-gray-50 peer-data-[state=checked]:border-rose-500 peer-data-[state=checked]:bg-rose-50 cursor-pointer transition-all"
-                  >
-                    <span className="text-2xl mb-2">👨‍👩‍👧‍👦</span>
-                    <span className="text-sm">Host Family</span>
-                  </Label>
-                </div>
-              </RadioGroup>
-            </motion.div>
 
             <Separator className="my-6" />
 
@@ -178,14 +134,14 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
             <form onSubmit={handleSubmit} className="space-y-4">
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                 <Label htmlFor="name" className="text-sm text-gray-700 mb-2 block">
-                  {userType === "family" ? "Family Name" : "Full Name"}
+                  Full Name
                 </Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <Input
                     id="name"
                     type="text"
-                    placeholder={userType === "family" ? "The Smith Family" : "Your name"}
+                    placeholder="Your name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="pl-10 h-12 rounded-xl border-gray-200 focus:border-orange-500"
@@ -327,6 +283,10 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                 </Button>
               </motion.div>
             </div>
+
+            {error ? (
+              <p className="mt-4 text-sm text-center text-red-500">{error}</p>
+            ) : null}
 
             {/* Switch to Login */}
             <div className="text-center mt-6">

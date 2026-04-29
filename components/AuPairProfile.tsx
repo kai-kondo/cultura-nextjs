@@ -31,7 +31,7 @@ type Props = {
 
 export default function AuPairProfile({ data, onLike, onMessage }: Props) {
   const gallery = data?.galleryImages ?? [];
-  const avatar = data?.profileImage || "/placeholder-avatar.png";
+  const avatar = data?.profileImage || "/placeholder-avatar.svg";
   const name = data?.name || "Unnamed";
   const age = typeof data?.age === "number" ? data!.age : undefined;
   const nationality = data?.nationality;
@@ -127,9 +127,9 @@ export default function AuPairProfile({ data, onLike, onMessage }: Props) {
 
               {infoChips.length > 0 && (
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  {infoChips.map((chip) => (
+                  {infoChips.map((chip, index) => (
                     <span
-                      key={chip}
+                      key={`${chip}-${index}`}
                       className="rounded-full border border-orange-200 bg-white/80 px-3 py-1 text-sm text-gray-700"
                     >
                       {chip}

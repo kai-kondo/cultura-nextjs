@@ -31,6 +31,11 @@ import {
   saveAuPairPhotos,
 } from "@/lib/profile-actions";
 
+interface SkillItem {
+  name: string;
+  years: string;
+}
+
 interface AuPairProfileFormData {
   firstName: string;
   lastName: string;
@@ -40,7 +45,7 @@ interface AuPairProfileFormData {
   photo: File | null;
   galleryPhotos: File[];
   bio: string;
-  skills: string[];
+  skills: SkillItem[];
   languages: { language: string; level: string }[];
   childcareExperience: string;
   previousExperience: string;
@@ -48,6 +53,8 @@ interface AuPairProfileFormData {
   availableFrom: string;
   duration: string;
   preferredLocations: string[];
+  workType: "aupair" | "babysitter";
+  hourlyRate: string;
 }
 
 const emptyAuPairProfileFormData: AuPairProfileFormData = {
@@ -67,6 +74,8 @@ const emptyAuPairProfileFormData: AuPairProfileFormData = {
   availableFrom: "",
   duration: "",
   preferredLocations: [],
+  workType: "aupair",
+  hourlyRate: "",
 };
 
 interface AuPairProfileCreateProps {
@@ -94,7 +103,10 @@ export function AuPairProfileCreate({
     ...initialData,
   });
 
-  const [newSkill, setNewSkill] = useState("");
+  const [newSkill, setNewSkill] = useState<SkillItem>({
+    name: "",
+    years: "",
+  });
   const [newLanguage, setNewLanguage] = useState({
     language: "",
     level: "Intermediate",
@@ -193,6 +205,11 @@ export function AuPairProfileCreate({
         age: profileData.age ? Number(profileData.age) : null,
         nationality: profileData.nationality || "",
         currentLocation: { city, country },
+        workType: profileData.workType,
+        hourlyRate:
+          profileData.workType === "babysitter" && profileData.hourlyRate
+            ? Number(profileData.hourlyRate)
+            : null,
       });
     }
     if (step === 2) {
@@ -211,10 +228,11 @@ export function AuPairProfileCreate({
     }
     if (step === 3) {
       await patchAuPairProfile(ensuredId, {
-        skills: profileData.skills.map((s) => ({
-          name: s,
+        skills: profileData.skills.map((skill) => ({
+          name: skill.name,
           emoji: "",
           level: "beginner",
+          years: skill.years ? Number(skill.years) : null,
         })),
         languages: {
           primary: profileData.languages[0]
@@ -313,19 +331,32 @@ export function AuPairProfileCreate({
   };
 
   const addSkill = () => {
-    if (newSkill.trim() && !profileData.skills.includes(newSkill.trim())) {
+    const trimmedName = newSkill.name.trim();
+
+    if (
+      trimmedName &&
+      !profileData.skills.some(
+        (skill) => skill.name.toLowerCase() === trimmedName.toLowerCase()
+      )
+    ) {
       setProfileData({
         ...profileData,
-        skills: [...profileData.skills, newSkill.trim()],
+        skills: [
+          ...profileData.skills,
+          {
+            name: trimmedName,
+            years: newSkill.years,
+          },
+        ],
       });
-      setNewSkill("");
+      setNewSkill({ name: "", years: "" });
     }
   };
 
-  const removeSkill = (skill: string) => {
+  const removeSkill = (skillName: string) => {
     setProfileData({
       ...profileData,
-      skills: profileData.skills.filter((s) => s !== skill),
+      skills: profileData.skills.filter((skill) => skill.name !== skillName),
     });
   };
 
@@ -419,9 +450,49 @@ export function AuPairProfileCreate({
             transition={{ duration: 0.3 }}
           >
             <Card className="p-8 bg-white/80 backdrop-blur border-orange-100">
-              {currentStep === 1 && (
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3 mb-6">
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label>Work Type *</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setProfileData({
+                          ...profileData,
+                          workType: "aupair",
+                          hourlyRate: "",
+                        })
+                      }
+                      className={`flex-1 rounded-lg px-4 py-2 border transition ${
+                        profileData.workType === "aupair"
+                          ? "bg-orange-500 text-white border-orange-500"
+                          : "bg-white"
+                      }`}
+                    >
+                      Au Pair (Live-in)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setProfileData({
+                          ...profileData,
+                          workType: "babysitter",
+                        })
+                      }
+                      className={`flex-1 rounded-lg px-4 py-2 border transition ${
+                        profileData.workType === "babysitter"
+                          ? "bg-orange-500 text-white border-orange-500"
+                          : "bg-white"
+                      }`}
+                    >
+                      Babysitter (Hourly)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 mb-6">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-rose-600 flex items-center justify-center">
                       <User className="w-6 h-6 text-white" />
                     </div>
@@ -510,6 +581,28 @@ export function AuPairProfileCreate({
                       />
                     </div>
                   </div>
+
+                  {profileData.workType === "babysitter" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="hourlyRate">Hourly Rate *</Label>
+                      <Input
+                        id="hourlyRate"
+                        type="number"
+                        min="0"
+                        value={profileData.hourlyRate}
+                        onChange={(e) =>
+                          setProfileData({
+                            ...profileData,
+                            hourlyRate: e.target.value,
+                          })
+                        }
+                        placeholder="e.g. 25"
+                      />
+                      <p className="text-sm text-gray-500">
+                        Enter your expected hourly rate in your local currency.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -646,14 +739,28 @@ export function AuPairProfileCreate({
 
                   <div className="space-y-2">
                     <Label>Skills & Talents</Label>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-2">
                       <Input
-                        value={newSkill}
-                        onChange={(e) => setNewSkill(e.target.value)}
+                        value={newSkill.name}
+                        onChange={(e) =>
+                          setNewSkill({ ...newSkill, name: e.target.value })
+                        }
                         onKeyPress={(e) =>
                           e.key === "Enter" && (e.preventDefault(), addSkill())
                         }
                         placeholder="e.g., Cooking, Swimming, Music"
+                      />
+                      <Input
+                        type="number"
+                        min="0"
+                        value={newSkill.years}
+                        onChange={(e) =>
+                          setNewSkill({ ...newSkill, years: e.target.value })
+                        }
+                        onKeyPress={(e) =>
+                          e.key === "Enter" && (e.preventDefault(), addSkill())
+                        }
+                        placeholder="Years"
                       />
                       <Button onClick={addSkill} variant="outline">
                         Add
@@ -662,12 +769,13 @@ export function AuPairProfileCreate({
                     <div className="flex flex-wrap gap-2 mt-3">
                       {profileData.skills.map((skill) => (
                         <Badge
-                          key={skill}
+                          key={skill.name}
                           className="gap-1 pr-1 bg-gradient-to-r from-orange-500 to-rose-600"
                         >
-                          {skill}
+                          {skill.name}
+                          {skill.years && <span className="ml-1">• {skill.years}y</span>}
                           <button
-                            onClick={() => removeSkill(skill)}
+                            onClick={() => removeSkill(skill.name)}
                             className="ml-1 hover:bg-white/20 rounded-full p-0.5"
                           >
                             <X className="w-3 h-3" />
@@ -802,7 +910,11 @@ export function AuPairProfileCreate({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div
+                    className={`grid gap-4 ${
+                      profileData.workType === "aupair" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
+                    }`}
+                  >
                     <div className="space-y-2">
                       <Label htmlFor="availableFrom">Available From *</Label>
                       <Input
@@ -817,26 +929,34 @@ export function AuPairProfileCreate({
                         }
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="duration">Preferred Duration *</Label>
-                      <select
-                        id="duration"
-                        value={profileData.duration}
-                        onChange={(e) =>
-                          setProfileData({
-                            ...profileData,
-                            duration: e.target.value,
-                          })
-                        }
-                        className="w-full px-3 py-2 border rounded-md bg-white"
-                      >
-                        <option value="">Select duration</option>
-                        <option value="3-6 months">3-6 months</option>
-                        <option value="6-12 months">6-12 months</option>
-                        <option value="1-2 years">1-2 years</option>
-                        <option value="2+ years">2+ years</option>
-                      </select>
-                    </div>
+
+                    {profileData.workType === "aupair" && (
+                      <div className="space-y-2 rounded-xl border-2 border-orange-200 bg-orange-50 p-4">
+                        <Label htmlFor="duration" className="text-orange-700">
+                          Preferred Duration *
+                        </Label>
+                        <select
+                          id="duration"
+                          value={profileData.duration}
+                          onChange={(e) =>
+                            setProfileData({
+                              ...profileData,
+                              duration: e.target.value,
+                            })
+                          }
+                          className="w-full px-3 py-2 border rounded-md bg-white"
+                        >
+                          <option value="">Select duration</option>
+                          <option value="3-6 months">3-6 months</option>
+                          <option value="6-12 months">6-12 months</option>
+                          <option value="1-2 years">1-2 years</option>
+                          <option value="2+ years">2+ years</option>
+                        </select>
+                        <p className="text-sm text-orange-700">
+                          Au Pair stays usually last longer, so duration is especially important.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">

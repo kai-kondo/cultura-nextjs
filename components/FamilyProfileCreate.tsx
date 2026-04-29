@@ -133,7 +133,20 @@ export function FamilyProfileCreate({
   function toChildren(children: { age: string; gender: string }[]) {
     return children
       .filter((c) => c.age)
-      .map((c) => ({ age: Number(c.age), gender: c.gender === "Any" ? undefined : (c.gender.toLowerCase() as "boy"|"girl"), emoji: "👶" }));
+      .map((c) => {
+        const base: { age: number; emoji: string; gender?: "boy" | "girl" | "any" } = {
+          age: Number(c.age),
+          emoji: "👶",
+        };
+  
+        if (c.gender === "Any") {
+          base.gender = "any";
+        } else {
+          base.gender = c.gender.toLowerCase() as "boy" | "girl";
+        }
+  
+        return base;
+      });
   }
 
   async function saveStep(step: number) {
@@ -185,7 +198,7 @@ export function FamilyProfileCreate({
           meals: "some_meals",
           allowance: profileData.weeklyAllowance
             ? { amount: Number(profileData.weeklyAllowance), currency: "USD", frequency: "weekly" }
-            : undefined,
+            : null,
           benefits: profileData.additionalBenefits ? profileData.additionalBenefits.split(",").map((s) => s.trim()).filter(Boolean) : [],
         },
       });

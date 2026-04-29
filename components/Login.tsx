@@ -5,9 +5,9 @@ import { Mail } from "lucide-react";
 import { motion } from "motion/react";
 import { CulturaLogo } from "./CulturaLogo";
 import { useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import { signInEmail, signInGoogle, signOutUser } from "@/lib/auth-actions";
 import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
 
 interface LoginProps {
   onLogin?: (type: "family" | "aupair") => void;
@@ -27,45 +27,10 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
     setLoading(true);
     try {
       const user = await signInEmail(email, password);
-
-      // --- Debug: Auth / Firestore connection & permissions ---
-      console.group("[Login] Firebase debug");
-      console.log("email:", email);
-      console.log("uid:", user?.uid);
-      console.log("env:", {
-        NEXT_PUBLIC_FIREBASE_PROJECT_ID:
-          process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:
-          process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-      });
-
-      const userRef = doc(db, "users", user.uid);
-      console.log("doc path:", userRef.path);
-
-      let snap;
-      try {
-        snap = await getDoc(userRef);
-        console.log("getDoc ok. exists:", snap.exists());
-        console.log("data:", snap.data());
-      } catch (fireErr: any) {
-        console.error("getDoc failed:", fireErr);
-        console.error("getDoc code:", fireErr?.code);
-        console.error("getDoc message:", fireErr?.message);
-        throw fireErr;
-      } finally {
-        console.groupEnd();
+      // UID が取れれば認証は成功とみなし、あとは /home 側のガードに任せる
+      if (user?.uid) {
+        window.location.href = "/home";
       }
-      // --- Debug end ---
-
-      if (snap.exists() && (snap.data() as any).isDeleted === true) {
-        await signOutUser();
-        setError("This account has been deleted and can no longer be used.");
-        return;
-      }
-
-      const userType =
-        (snap.exists() && (snap.data() as any).userType) || "aupair";
-      onLogin?.(userType);
     } catch (err: any) {
       console.error("[Login] error raw:", err);
       console.error("[Login] code:", err?.code);
@@ -91,18 +56,33 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
     setLoading(true);
 
     try {
-      const user = await signInGoogle("aupair");
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists() && (snap.data() as any).isDeleted === true) {
+      const user = await signInGoogle("aupair", "login");
+
+      if (!user?.uid) {
+        setError("Google sign-in failed. Please try again.");
+        return;
+      }
+
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+
+      // Login画面では、既存アカウントだけを通す。
+      // Firestore上にユーザードキュメントが無い場合は新規ユーザー扱いにして
+      // ログイン継続させず、Signupフローへ送る。
+      if (!userSnap.exists()) {
+        await signOutUser();
+        window.location.href = "/signup";
+        return;
+      }
+
+      const userData = userSnap.data() as any;
+
+      if (userData?.isDeleted === true) {
         await signOutUser();
         setError("This account has been deleted and can no longer be used.");
         return;
       }
-      const userType =
-        (snap.exists() && ((snap.data() as any).userType as "family" | "aupair")) ||
-        "aupair";
 
-      onLogin?.(userType);
+      window.location.href = "/home";
     } catch (err: any) {
       console.error("[Google Login] error raw:", err);
       console.error("[Google Login] code:", err?.code);

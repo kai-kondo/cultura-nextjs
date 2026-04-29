@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 
 
-const PLACEHOLDER_AVATAR = '/placeholder-avatar.png';
+const PLACEHOLDER_AVATAR = '/placeholder-avatar.svg';
 
 type UserType = 'family' | 'aupair' | null;
 
@@ -143,9 +143,9 @@ async function resolveOtherParticipant(routeId: string): Promise<ResolvedPartici
   return {
     participant: {
       id: routeId,
-      name: 'Cultura Member',
+      name: 'My Notes',
       avatar: PLACEHOLDER_AVATAR,
-      subtitle: 'Cultura member',
+      subtitle: 'Personal notes',
     },
     profilePath: null,
   };
@@ -242,13 +242,40 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    const storedType = localStorage.getItem('userType') as UserType;
-    if (!storedType) {
-      router.push('/');
-      return;
-    }
-    setUserType(storedType);
-  }, [router]);
+    if (!firebaseUser) return;
+    let cancelled = false;
+
+    const loadUserType = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (!snap.exists()) {
+          if (!cancelled) router.push('/profile-create');
+          return;
+        }
+        const data = snap.data() as { userType?: 'family' | 'aupair'; profileRef?: string | null };
+        let type: UserType = data.userType ?? null;
+        if (!type && data.profileRef) {
+          if (data.profileRef.startsWith('auPairProfiles/')) type = 'aupair';
+          if (data.profileRef.startsWith('familyProfiles/')) type = 'family';
+        }
+        if (!type) {
+          if (!cancelled) router.push('/profile-create');
+          return;
+        }
+        if (!cancelled) {
+          setUserType(type);
+          localStorage.setItem('userType', type);
+        }
+      } catch {
+        if (!cancelled) router.push('/');
+      }
+    };
+
+    void loadUserType();
+    return () => {
+      cancelled = true;
+    };
+  }, [firebaseUser, router]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -301,9 +328,9 @@ export default function MessagesPage() {
         if (!cancelled) {
           setOther({
             id: profileId,
-            name: 'Cultura Member',
+            name: 'My Notes',
             avatar: PLACEHOLDER_AVATAR,
-            subtitle: 'Cultura member',
+            subtitle: 'Personal notes',
           });
           setOtherProfilePath(null);
         }

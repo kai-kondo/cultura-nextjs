@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Send, UserRound } from "lucide-react";
+import { ArrowLeft, ChevronLeft, Loader2, MessageSquare, Send, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Button } from "./ui/button";
 
@@ -61,9 +61,44 @@ function isDeletedParticipant(participant: MessageParticipant | null | undefined
   return normalized === "deleted user" || normalized === "デリートユーザー";
 }
 
+function isFallbackParticipant(participant: MessageParticipant | null | undefined) {
+  if (!participant) return false;
+  const normalized = (participant.name || "").trim().toLowerCase();
+  return normalized === "cultura member" || normalized === "member";
+}
+
+function getConversationStartName(participant: MessageParticipant | null | undefined) {
+  if (!participant) return "this member";
+  if (isDeletedParticipant(participant)) return "this member";
+  if (isFallbackParticipant(participant)) return "this member";
+  return participant.name;
+}
+
+function getMessageInputPlaceholder(
+  participant: MessageParticipant | null | undefined,
+  hasMessages: boolean
+) {
+  if (!participant) return "Write a message...";
+  if (isDeletedParticipant(participant)) return "This account is no longer available";
+
+  const normalized = (participant.name || "").trim().toLowerCase();
+  if (normalized === "my notes") return "Write a note...";
+
+  if (!hasMessages) {
+    const name = getConversationStartName(participant);
+    return name === "this member"
+      ? "Say hello..."
+      : `Say hello to ${name}...`;
+  }
+
+  return `Message ${getParticipantDisplayName(participant)}...`;
+}
+
 function getParticipantDisplayName(participant: MessageParticipant | null | undefined) {
   if (!participant) return "";
-  return isDeletedParticipant(participant) ? "デリートユーザー" : participant.name;
+  if (isDeletedParticipant(participant)) return "デリートユーザー";
+  if (isFallbackParticipant(participant)) return "Cultura Member";
+  return participant.name;
 }
 
 function getParticipantSubtitle(participant: MessageParticipant | null | undefined) {
@@ -81,6 +116,12 @@ function getParticipantInitials(participant: MessageParticipant | null | undefin
 function getParticipantAvatarSrc(participant: MessageParticipant | null | undefined) {
   if (!participant || isDeletedParticipant(participant)) return "";
   return participant.avatar || "";
+}
+
+function isMyNotesParticipant(participant: MessageParticipant | null | undefined) {
+  if (!participant) return false;
+  const normalized = (participant.name || "").trim().toLowerCase();
+  return normalized === "my notes";
 }
 
 function formatMessageTime(iso: string) {
@@ -122,6 +163,7 @@ export function Messages({
 }: MessagesProps) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
+  const [showMobileList, setShowMobileList] = useState(!activeThreadId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const activeThread = useMemo(() => {
@@ -143,6 +185,10 @@ export function Messages({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeThread?.messages.length, activeThread?.id]);
 
+  useEffect(() => {
+    setShowMobileList(!activeThreadId);
+  }, [activeThreadId]);
+
   const handleSend = async () => {
     const text = draft.trim();
     if (!text || !activeThread || sending) return;
@@ -153,6 +199,60 @@ export function Messages({
   const showChatLoader = loading && !activeThread;
   const showSidebar = conversationList.length > 0 && typeof onSelectConversation === "function";
 
+  const conversationSidebar = showSidebar ? (
+    <>
+      <div className="border-b border-orange-100/80 px-5 py-4">
+        <p className="text-[13px] font-semibold tracking-wide text-orange-600">Chats</p>
+        <p className="mt-1 text-2xl font-semibold text-slate-900">Messages</p>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {conversationList.map((row) => {
+          const selected = row.threadId === activeThreadId;
+          return (
+            <button
+              key={row.threadId}
+              type="button"
+              onClick={() => {
+                onSelectConversation?.(row.other.id);
+                setShowMobileList(false);
+              }}
+              className={`mx-2 my-1.5 flex w-[calc(100%-1rem)] items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all ${
+                selected
+                  ? "bg-white shadow-[0_8px_24px_rgba(251,113,133,0.12)] ring-1 ring-orange-100"
+                  : "bg-transparent hover:bg-white"
+              }`}
+            >
+              <Avatar className="h-12 w-12 shrink-0 border border-orange-100 shadow-sm">
+                <AvatarImage src={getParticipantAvatarSrc(row.other)} alt="" />
+                <AvatarFallback className="bg-orange-100 text-orange-800 text-xs">
+                  {getParticipantInitials(row.other)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="truncate font-medium text-gray-900">
+                    {getParticipantDisplayName(row.other)}
+                  </p>
+                  <span className="shrink-0 text-[11px] text-gray-500">
+                    {formatListDate(row.lastMessageAtIso)}
+                  </span>
+                </div>
+                <p className="truncate text-sm text-gray-600">
+                  {row.lastPreview || "No messages yet"}
+                </p>
+              </div>
+              {row.unread > 0 ? (
+                <span className="mt-1 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-1.5 text-[10px] font-semibold text-white shadow-sm">
+                  {row.unread > 99 ? "99+" : row.unread}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  ) : null;
+
   return (
     <div className="flex h-[min(760px,calc(100vh-5.5rem))] min-h-[500px] flex-col overflow-hidden rounded-[28px] border border-orange-100/80 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)] lg:flex-row">
       {showSidebar ? (
@@ -160,70 +260,54 @@ export function Messages({
           className="hidden h-full w-[min(100%,340px)] shrink-0 flex-col border-r border-orange-100/80 bg-[#fffaf8] lg:flex"
           aria-label="Conversations"
         >
-          <div className="border-b border-orange-100/80 px-5 py-4">
-            <p className="text-[13px] font-semibold tracking-wide text-orange-600">Chats</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">Messages</p>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {conversationList.map((row) => {
-              const selected = row.threadId === activeThreadId;
-              return (
-                <button
-                  key={row.threadId}
-                  type="button"
-                  onClick={() => onSelectConversation!(row.other.id)}
-                  className={`mx-2 my-1.5 flex w-[calc(100%-1rem)] items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all ${
-                    selected
-                      ? "bg-white shadow-[0_8px_24px_rgba(251,113,133,0.12)] ring-1 ring-orange-100"
-                      : "bg-transparent hover:bg-white"
-                  }`}
-                >
-                  <Avatar className="h-12 w-12 shrink-0 border border-orange-100 shadow-sm">
-                    <AvatarImage src={getParticipantAvatarSrc(row.other)} alt="" />
-                    <AvatarFallback className="bg-orange-100 text-orange-800 text-xs">
-                      {getParticipantInitials(row.other)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="truncate font-medium text-gray-900">
-                        {getParticipantDisplayName(row.other)}
-                      </p>
-                      <span className="shrink-0 text-[11px] text-gray-500">
-                        {formatListDate(row.lastMessageAtIso)}
-                      </span>
-                    </div>
-                    <p className="truncate text-sm text-gray-600">
-                      {row.lastPreview || "No messages yet"}
-                    </p>
-                  </div>
-                  {row.unread > 0 ? (
-                    <span className="mt-1 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-1.5 text-[10px] font-semibold text-white shadow-sm">
-                      {row.unread > 99 ? "99+" : row.unread}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+          {conversationSidebar}
         </aside>
       ) : null}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
-      <div className="flex items-center gap-3 border-b border-orange-100/80 bg-white px-4 py-3 sm:px-5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="shrink-0 rounded-full text-gray-700 hover:bg-orange-50"
-          aria-label="Back to home"
-          onClick={() => router.push("/home")}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
+      {showSidebar && showMobileList ? (
+        <div className="flex min-h-0 flex-1 flex-col bg-[#fffaf8] lg:hidden">
+          <div className="flex items-center gap-3 border-b border-orange-100/80 bg-white px-4 py-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 rounded-full text-gray-700 hover:bg-orange-50"
+              aria-label={activeThreadId ? "Back to conversation" : "Back to home"}
+              onClick={() => {
+                if (activeThreadId) {
+                  setShowMobileList(false);
+                  return;
+                }
+                router.push("/home");
+              }}
+            >
+              {activeThreadId ? <ChevronLeft className="h-5 w-5" /> : <ArrowLeft className="h-5 w-5" />}
+            </Button>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold tracking-wide text-orange-600">Chats</p>
+              <p className="truncate text-lg font-semibold text-slate-900">Messages</p>
+            </div>
+          </div>
+          {conversationSidebar}
+        </div>
+      ) : null}
 
+      <div className={`${showSidebar && showMobileList ? "hidden lg:flex" : "flex"} min-h-0 min-w-0 flex-1 flex-col bg-white`}>
+      <div className="flex items-center gap-3 border-b border-orange-100/80 bg-white px-4 py-3 sm:px-5">
         {other ? (
           <>
+            {showSidebar ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 rounded-full text-gray-700 hover:bg-orange-50 lg:hidden"
+                aria-label="Show conversations"
+                onClick={() => setShowMobileList(true)}
+              >
+                <MessageSquare className="h-5 w-5" />
+              </Button>
+            ) : null}
             <Avatar className="h-11 w-11 border border-orange-100 shadow-sm">
               <AvatarImage src={getParticipantAvatarSrc(other)} alt="" />
               <AvatarFallback className="bg-orange-100 text-orange-800">
@@ -240,17 +324,19 @@ export function Messages({
                 </p>
               ) : null}
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 rounded-full border-orange-200 bg-white text-orange-800 hover:bg-orange-50"
-              onClick={onOpenProfile}
-              disabled={isDeletedParticipant(other)}
-            >
-              <UserRound className="mr-1.5 h-4 w-4" />
-              Profile
-            </Button>
+            {!isMyNotesParticipant(other) ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 rounded-full border-orange-200 bg-white text-orange-800 hover:bg-orange-50"
+                onClick={onOpenProfile}
+                disabled={isDeletedParticipant(other)}
+              >
+                <UserRound className="mr-1.5 h-4 w-4" />
+                Profile
+              </Button>
+            ) : null}
           </>
         ) : (
           <div className="flex flex-1 items-center gap-2 text-sm text-gray-600">
@@ -276,7 +362,15 @@ export function Messages({
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(251,113,133,0.06),_transparent_32%),radial-gradient(circle_at_bottom,_rgba(249,115,22,0.06),_transparent_28%)] px-4 py-5 sm:px-5">
               {activeThread.messages.length === 0 ? (
-                <p className="text-center text-sm text-gray-500">No messages yet. Say hello!</p>
+                <div className="flex min-h-[45vh] flex-col items-center justify-center px-6 text-center">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-orange-100 to-rose-100 text-orange-700 shadow-sm">
+                    <MessageSquare className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900">No messages yet</h3>
+                  <p className="mt-2 max-w-sm text-sm leading-6 text-gray-500">
+                    Start your conversation with {getConversationStartName(other)}.
+                  </p>
+                </div>
               ) : null}
               {activeThread.messages.map((message) => {
                 const mine = message.fromId === me.id;
@@ -326,9 +420,9 @@ export function Messages({
                       void handleSend();
                     }
                   }}
-                  placeholder="Type a message…"
+                  placeholder={getMessageInputPlaceholder(other, activeThread.messages.length > 0)}
                   rows={1}
-                  disabled={sending || loading}
+                  disabled={sending || loading || isDeletedParticipant(other)}
                   className="min-h-[44px] flex-1 resize-none border-0 bg-transparent px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 disabled:opacity-60"
                 />
                 <Button
