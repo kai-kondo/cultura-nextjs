@@ -5,6 +5,8 @@ import { Mail } from "lucide-react";
 import { motion } from "motion/react";
 import { CulturaLogo } from "./CulturaLogo";
 import { useState } from "react";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { signInEmail } from "@/lib/auth-actions";
 import { db } from "@/lib/firebase";
@@ -19,6 +21,10 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleEmailLogin(e: React.FormEvent) {
@@ -51,6 +57,50 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
       setError(message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function openPasswordResetModal() {
+    setError(null);
+    setResetError(null);
+    setResetMessage(null);
+    setShowResetModal(true);
+  }
+
+  function closePasswordResetModal() {
+    setShowResetModal(false);
+    setResetError(null);
+    setResetMessage(null);
+    setResetLoading(false);
+  }
+
+  async function handlePasswordReset() {
+    setResetError(null);
+    setResetMessage(null);
+
+    if (!email) {
+      setResetError("Enter your email and we’ll send you a reset link.");
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetMessage("We’ve sent a password reset link to your inbox.");
+    } catch (err: any) {
+      console.error("[Password Reset] error:", err);
+
+      let message = "We couldn’t send the reset email. Please try again.";
+      if (err?.code === "auth/invalid-email") {
+        message = "That email doesn’t look quite right.";
+      } else if (err?.code === "auth/user-not-found") {
+        message = "We couldn’t find your Cultura account yet.";
+      }
+
+      setResetError(message);
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -195,6 +245,15 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
                   placeholder="Password"
                   className="w-full rounded-lg border border-gray-300 bg-white/90 p-3 outline-none focus:ring-2 focus:ring-orange-400"
                 />
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={openPasswordResetModal}
+                    className="text-sm text-orange-500 hover:underline"
+                  >
+                    Forgot your password?
+                  </button>
+                </div>
                 {error && !shouldShowLoginErrorModal ? (
                   <p className="text-sm text-red-500">{error}</p>
                 ) : null}
@@ -207,6 +266,69 @@ export function Login({ onLogin, onSwitchToSignup }: LoginProps) {
                 </Button>
               </form>
             )}
+
+            {showResetModal ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-white p-6 text-center shadow-2xl"
+                >
+                  <div className="pointer-events-none absolute -top-20 -right-20 h-40 w-40 rounded-full bg-orange-200/60 blur-3xl" />
+                  <div className="pointer-events-none absolute -bottom-20 -left-20 h-40 w-40 rounded-full bg-rose-200/60 blur-3xl" />
+
+                  <div className="relative">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100">
+                      <Mail className="h-6 w-6 text-orange-500" />
+                    </div>
+
+                    <h2 className="mb-2 text-lg font-semibold text-gray-800">
+                      Reset your password
+                    </h2>
+
+                    <p className="mb-5 text-sm leading-relaxed text-gray-600">
+                      Enter the email connected to your Cultura account. We’ll send you a secure link to create a new password.
+                    </p>
+
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Email address"
+                      className="mb-3 w-full rounded-xl border border-gray-300 bg-white/90 p-3 text-left outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+
+                    {resetError ? (
+                      <p className="mb-3 text-left text-sm text-red-500">{resetError}</p>
+                    ) : null}
+
+                    {resetMessage ? (
+                      <p className="mb-3 rounded-xl bg-orange-50 px-3 py-2 text-left text-sm text-orange-700">
+                        {resetMessage}
+                      </p>
+                    ) : null}
+
+                    <Button
+                      type="button"
+                      onClick={handlePasswordReset}
+                      disabled={resetLoading}
+                      className="w-full h-11 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-rose-500 text-white shadow-md hover:from-orange-600 hover:via-amber-600 hover:to-rose-600"
+                    >
+                      {resetLoading ? "Sending..." : "Send reset link"}
+                    </Button>
+
+                    <button
+                      type="button"
+                      onClick={closePasswordResetModal}
+                      className="mt-4 text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      Back to sign in
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            ) : null}
 
             {shouldShowLoginErrorModal ? (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
