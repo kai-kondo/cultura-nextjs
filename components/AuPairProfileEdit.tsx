@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import type { AuPairProfile } from "@/lib/types";
 import { AuPairProfileCreate } from "./AuPairProfileCreate";
 
+type SkillItem = { name: string; years: string };
 type AuPairEditInitialData = {
   firstName: string;
   lastName: string;
@@ -18,7 +19,7 @@ type AuPairEditInitialData = {
   profileImageUrl?: string;
   galleryImageUrls?: string[];
   bio: string;
-  skills: string[];
+  skills: SkillItem[];
   languages: { language: string; level: string }[];
   childcareExperience: string;
   previousExperience: string;
@@ -67,33 +68,41 @@ function mapAuPairProfileToInitialData(profile: AuPairProfile): AuPairEditInitia
     language: l.language,
     level: mapLanguageLevel(l.proficiency),
   }));
-
-  return {
-    firstName,
-    lastName,
-    age: profile.age ? String(profile.age) : "",
-    nationality: profile.nationality || "",
-    currentLocation: [profile.currentLocation?.city, profile.currentLocation?.country]
-      .filter(Boolean)
-      .join(", "),
-    profileImageUrl: profile.profileImage || "",
-    galleryImageUrls: profile.galleryImages || [],
-    bio: profile.aboutMe || "",
-    skills: (profile.skills || []).map((s) => s.name),
-    languages: [...primaryLanguage, ...secondaryLanguages],
-    childcareExperience:
-      profile.experience?.find((e) => e.type === "childcare")?.description || "",
-    previousExperience:
-      profile.experience
-        ?.filter((e) => e.type !== "childcare")
-        .map((e) => e.description)
-        .join("\n") || "",
-    certifications: profile.certifications || [],
-    availableFrom: profile.availability?.availableFrom || "",
-    duration: profile.availability?.duration || "",
-    preferredLocations: (profile.desiredCountries || []).map((c) => c.country).filter(Boolean),
-  };
-}
+  
+    // Ensure each skill is mapped to { name, years } as string
+    const skills = (profile.skills || [])
+      .map((s: any) => ({
+        name: typeof s === "string" ? s : s.name,
+        years: s.years ? String(s.years) : "",
+      }))
+      .filter((s) => Boolean(s.name));
+  
+    return {
+      firstName,
+      lastName,
+      age: profile.age ? String(profile.age) : "",
+      nationality: profile.nationality || "",
+      currentLocation: [profile.currentLocation?.city, profile.currentLocation?.country]
+        .filter(Boolean)
+        .join(", "),
+      profileImageUrl: profile.profileImage || "",
+      galleryImageUrls: profile.galleryImages || [],
+      bio: profile.aboutMe || "",
+      skills,
+      languages: [...primaryLanguage, ...secondaryLanguages],
+      childcareExperience:
+        profile.experience?.find((e) => e.type === "childcare")?.description || "",
+      previousExperience:
+        profile.experience
+          ?.filter((e) => e.type !== "childcare")
+          .map((e) => e.description)
+          .join("\n") || "",
+      certifications: profile.certifications || [],
+      availableFrom: profile.availability?.availableFrom || "",
+      duration: profile.availability?.duration || "",
+      preferredLocations: (profile.desiredCountries || []).map((c) => c.country).filter(Boolean),
+    };
+  }
 
 export function AuPairProfileEdit({ profileId, onComplete }: AuPairProfileEditProps) {
   const [loading, setLoading] = useState(true);
