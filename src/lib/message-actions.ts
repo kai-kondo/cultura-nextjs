@@ -32,6 +32,7 @@ import {
     participantSummary: Record<string, ChatParticipantSummary>;
     lastMessageText: string;
     lastMessageAt: Timestamp | null;
+    lastReadAt: Record<string, Timestamp> | null;
     createdAt: Timestamp | null;
     updatedAt: Timestamp | null;
   };
@@ -80,6 +81,7 @@ import {
       participantSummary: data.participantSummary ?? {},
       lastMessageText: data.lastMessageText ?? "",
       lastMessageAt: data.lastMessageAt ?? null,
+      lastReadAt: data.lastReadAt ?? null,
       createdAt: data.createdAt ?? null,
       updatedAt: data.updatedAt ?? null,
     };
@@ -318,13 +320,17 @@ import {
       return data.senderId !== myUid && !readBy.includes(myUid);
     });
   
-    await Promise.all(
-      targets.map((docSnap) =>
+    const threadRef = doc(db, "threads", threadId);
+    await Promise.all([
+      ...targets.map((docSnap) =>
         updateDoc(docSnap.ref, {
           readBy: arrayUnion(myUid),
         })
-      )
-    );
+      ),
+      updateDoc(threadRef, {
+        [`lastReadAt.${myUid}`]: serverTimestamp(),
+      }),
+    ]);
   }
   
   /**

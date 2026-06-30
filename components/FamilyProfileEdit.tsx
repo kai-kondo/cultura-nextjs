@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import type { FamilyProfile } from "@/lib/types";
 import { FamilyProfileCreate } from "./FamilyProfileCreate";
 
@@ -89,9 +89,19 @@ export function FamilyProfileEdit({
           return;
         }
 
+        const currentUid = auth.currentUser?.uid;
+        const profileData = snap.data() as FamilyProfile;
+        if (!currentUid || profileData.userId !== currentUid) {
+          if (!cancelled) {
+            setError("You don't have permission to edit this profile.");
+            setLoading(false);
+          }
+          return;
+        }
+
         if (cancelled) return;
 
-        setInitialData(mapFamilyProfileToInitialData(snap.data() as FamilyProfile));
+        setInitialData(mapFamilyProfileToInitialData(profileData));
         setLoading(false);
       } catch (e: any) {
         if (!cancelled) {

@@ -19,6 +19,7 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userType, setUserType] = useState<"aupair" | "family">("aupair");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -33,7 +34,7 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
     setError(null);
 
     try {
-      await signUpEmail(formData.email, formData.password, "aupair");
+      await signUpEmail(formData.email, formData.password, userType);
       if (typeof window !== "undefined") {
         localStorage.removeItem("userType");
       }
@@ -144,10 +145,38 @@ export function Signup({ onSignupComplete, onSwitchToLogin }: SignupProps) {
                 Join Cultura
               </h1>
               <p className="text-sm text-gray-600">
-                Create your account first, then choose your profile type in the next step
+                Who are you joining as?
               </p>
             </div>
 
+            <div className="grid grid-cols-2 gap-3 mb-2">
+              <button
+                type="button"
+                onClick={() => setUserType("aupair")}
+                className={`flex flex-col items-center gap-1 rounded-2xl border-2 p-4 transition-all ${
+                  userType === "aupair"
+                    ? "border-orange-500 bg-orange-50 shadow-sm"
+                    : "border-gray-200 bg-white hover:border-orange-300"
+                }`}
+              >
+                <span className="text-2xl">🌍</span>
+                <span className="text-sm font-medium text-gray-800">Au Pair</span>
+                <span className="text-xs text-gray-500">Looking for a family</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setUserType("family")}
+                className={`flex flex-col items-center gap-1 rounded-2xl border-2 p-4 transition-all ${
+                  userType === "family"
+                    ? "border-orange-500 bg-orange-50 shadow-sm"
+                    : "border-gray-200 bg-white hover:border-orange-300"
+                }`}
+              >
+                <span className="text-2xl">🏠</span>
+                <span className="text-sm font-medium text-gray-800">Host Family</span>
+                <span className="text-xs text-gray-500">Looking for an au pair</span>
+              </button>
+            </div>
 
             <Separator className="my-6" />
 

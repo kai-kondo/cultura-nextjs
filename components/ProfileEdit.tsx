@@ -27,6 +27,7 @@ import type { AuPairProfile, FamilyProfile, UserType } from "@/lib/types";
 import { auth, db, storage } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { toast } from "sonner";
 
 interface ProfileEditProps {
   userType: UserType; // "family" | "aupair"
@@ -36,6 +37,7 @@ interface ProfileEditProps {
 
 export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -225,6 +227,7 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
       if (!auth.currentUser) {
         throw new Error("Not authenticated");
       }
+      setIsUploading(true);
       logAuth("Avatar change");
       const url = await uploadImageAndGetURL(file, `${colName}/${profileDocId}/avatar.jpg`);
       setAvatarURL(url);
@@ -241,12 +244,15 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
         throw e;
       }
       e.currentTarget.value = "";
+      toast.success("Photo updated");
     } catch (err: any) {
       setError(err?.message || "Upload failed");
-      // clear file input safely using the original event
+      toast.error("Upload failed. Please try again.");
       if (e?.currentTarget) {
         e.currentTarget.value = "";
       }
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -292,8 +298,10 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
       console.log("[ProfileEdit] Saving to:", refDoc.path, update);
       await updateDoc(refDoc, update);
       console.log("[ProfileEdit] Save ok");
+      toast.success("Profile saved");
     } catch (e: any) {
       setError(e?.message || "Failed to save");
+      toast.error("Failed to save. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -358,9 +366,16 @@ export function ProfileEdit({ userType, profileId, onBack }: ProfileEditProps) {
                   )} />
                   <AvatarFallback>{(name || "").slice(0, 2) || "--"}</AvatarFallback>
                 </Avatar>
-                <Button size="icon" className="absolute bottom-0 right-0 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={handleAvatarClick}>
-                  <Camera className="w-4 h-4" />
-                </Button>
+                {isUploading && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  </div>
+                )}
+                {!isUploading && (
+                  <Button size="icon" className="absolute bottom-0 right-0 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={handleAvatarClick}>
+                    <Camera className="w-4 h-4" />
+                  </Button>
+                )}
                 <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
               </div>
               <div className="flex-1">

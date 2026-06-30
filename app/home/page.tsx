@@ -78,8 +78,24 @@ export default function HomePage() {
     }
   };
 
-  if (loading) return null; // TODO: Skeleton
-  if (!userType) return null; // リダイレクト中
+  if (loading || !userType) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-amber-50">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="h-12 w-64 bg-orange-100 rounded-xl mb-6 animate-pulse" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            {[...Array(12)].map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-48 w-full rounded-2xl bg-orange-100 animate-pulse" />
+                <div className="h-3 w-3/4 rounded bg-orange-100 animate-pulse" />
+                <div className="h-3 w-1/2 rounded bg-orange-100 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative pb-16 lg:pb-0">

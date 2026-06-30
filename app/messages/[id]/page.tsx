@@ -14,6 +14,7 @@ import {
   type ChatThread,
 } from '@/lib/message-actions';
 import { auth, db } from '@/lib/firebase';
+import { toast } from 'sonner';
 import {
   Messages,
   type MessageConversationListItem,
@@ -187,7 +188,13 @@ function chatThreadToConversationRow(
     },
     lastPreview: thread.lastMessageText ?? '',
     lastMessageAtIso: lastAt,
-    unread: thread.id === activeThreadId ? activeUnread : 0,
+    unread: thread.id === activeThreadId
+      ? activeUnread
+      : (() => {
+          const myLastRead = thread.lastReadAt?.[meId];
+          if (!myLastRead || !thread.lastMessageAt) return 0;
+          return thread.lastMessageAt.toMillis() > myLastRead.toMillis() ? 1 : 0;
+        })(),
   };
 }
 
@@ -429,6 +436,7 @@ export default function MessagesPage() {
       });
     } catch (error) {
       console.error('Failed to send message:', error);
+      toast.error("Message failed to send. Please try again.");
     } finally {
       setSending(false);
     }
@@ -484,17 +492,16 @@ export default function MessagesPage() {
   }, [me, chatThreads, threadId, other, messages, activeUnread]);
 
   if (!userType || !me || !other) {
-    return null;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50 flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-300 border-t-orange-600" />
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50 p-4 pb-20 lg:pb-4">
       <div className="mx-auto max-w-7xl">
-        {threadListenErrorCode ? (
-          <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            Debug: listenThreads error code = <span className="font-semibold">{threadListenErrorCode}</span>
-          </div>
-        ) : null}
         <Messages
           me={me}
           threads={threads}
@@ -507,7 +514,11 @@ export default function MessagesPage() {
           onSelectConversation={(routeId) => router.push(`/messages/${routeId}`)}
         />
       </div>
-      <MobileBottomNav activeScreen="messages" onNavigate={handleMobileNavigation} />
+      <MobileBottomNav
+        activeScreen="messages"
+        onNavigate={handleMobileNavigation}
+        hasUnreadMessages={conversationList.some((c) => c.unread > 0)}
+      />
     </div>
   );
 }

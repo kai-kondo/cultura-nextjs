@@ -121,6 +121,8 @@ export function AuPairProfileCreate({
   const dayOptions = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const [profileId, setProfileId] = useState<string | null>(initialProfileId);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!initialData) return;
@@ -431,14 +433,19 @@ export function AuPairProfileCreate({
   };
 
   const handleNext = async () => {
-    // 保存（現在のステップのデータをFirestoreへ）
-    await saveStep(currentStep);
-
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      // 最終ステップ：完了
-      onComplete();
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveStep(currentStep);
+      if (currentStep < totalSteps) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        onComplete();
+      }
+    } catch (e: any) {
+      setSaveError(e?.message || "Failed to save. Please check your connection and try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1063,27 +1070,32 @@ export function AuPairProfileCreate({
               )}
 
               {/* Navigation Buttons */}
-              <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
+              {saveError && (
+                <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {saveError}
+                </p>
+              )}
+              <div className="flex justify-between mt-4 pt-6 border-t border-gray-200">
                 <Button
                   onClick={handleBack}
                   variant="outline"
-                  disabled={currentStep === 1}
+                  disabled={currentStep === 1 || saving}
                   className="gap-2"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   Back
                 </Button>
                 <Button
-                  onClick={handleNext}
-                  disabled={currentStep === 2 && !profileId}
+                  onClick={() => void handleNext()}
+                  disabled={(currentStep === 2 && !profileId) || saving}
                   className="gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 disabled:opacity-60"
                 >
-                  {currentStep === totalSteps
+                  {saving ? "Saving..." : currentStep === totalSteps
                     ? mode === "create"
                       ? "Complete Profile"
                       : "Save Changes"
                     : "Next"}
-                  <ChevronRight className="w-4 h-4" />
+                  {!saving && <ChevronRight className="w-4 h-4" />}
                 </Button>
               </div>
             </Card>

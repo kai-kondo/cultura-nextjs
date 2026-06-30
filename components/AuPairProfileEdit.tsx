@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import type { AuPairProfile } from "@/lib/types";
 import { AuPairProfileCreate } from "./AuPairProfileCreate";
 
@@ -128,9 +128,19 @@ export function AuPairProfileEdit({ profileId, onComplete }: AuPairProfileEditPr
           return;
         }
 
+        const currentUid = auth.currentUser?.uid;
+        const profileData = snap.data() as AuPairProfile;
+        if (!currentUid || profileData.userId !== currentUid) {
+          if (!cancelled) {
+            setError("You don't have permission to edit this profile.");
+            setLoading(false);
+          }
+          return;
+        }
+
         if (cancelled) return;
 
-        setInitialData(mapAuPairProfileToInitialData(snap.data() as AuPairProfile));
+        setInitialData(mapAuPairProfileToInitialData(profileData));
         setLoading(false);
       } catch (e: any) {
         if (!cancelled) {

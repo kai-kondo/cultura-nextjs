@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { AccountSettings } from '@/components/AccountSettings';
+import { ProfileSettings } from '@/components/ProfileSettings';
 import { auth, db } from '@/lib/firebase';
 import { signOutUser } from '@/lib/auth-actions';
 import type { UserType } from '@/lib/types';
@@ -106,7 +106,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <AccountSettings
+    <ProfileSettings
       userType={userType}
       profileId={profileId}
       onClose={handleBack}

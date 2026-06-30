@@ -171,6 +171,12 @@ export function ProfileDetail({ userType, profileId, onMessageClick, onLikeClick
         };
         setProfile(vm);
       }
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, [profileId, userType]);
+
   useEffect(() => {
     const currentUid = auth.currentUser?.uid;
     if (!currentUid || !profile?.ownerUserId || currentUid === profile.ownerUserId) {
@@ -190,12 +196,6 @@ export function ProfileDetail({ userType, profileId, onMessageClick, onLikeClick
 
     return () => unsub();
   }, [profile?.ownerUserId]);
-
-      setLoading(false);
-    });
-
-    return () => unsub();
-  }, [profileId, userType]);
 
   const handlePrevImage = () => {
     if (selectedImage !== null && selectedImage > 0) setSelectedImage(selectedImage - 1);
