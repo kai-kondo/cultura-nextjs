@@ -1,0 +1,48 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function authed() { return request.auth != null; }
+    function hasImageContentType() {
+      return request.resource != null && request.resource.contentType.matches('image/.*');
+    }
+    function hasImageExtension() {
+      return request.resource != null && request.resource.name.matches('(?i).+\\.(jpe?g|png|webp|gif|heic|heif)$');
+    }
+    function isImage() { return hasImageContentType() || hasImageExtension(); }
+    function isSmall() { return request.resource != null && request.resource.size < 10 * 1024 * 1024; }
+
+    // Cloud Firestore 側の auPairProfiles/{profileId}.userId /
+    // familyProfiles/{profileId}.userId を見て、リクエストしてきた本人が
+    // そのプロフィールの所有者かどうかを判定する（クロスサービスルール）。
+    function isAuPairProfileOwner(profileId) {
+      return authed()
+        && firestore.exists(/databases/(default)/documents/auPairProfiles/$(profileId))
+        && firestore.get(/databases/(default)/documents/auPairProfiles/$(profileId)).data.userId == request.auth.uid;
+    }
+
+    function isFamilyProfileOwner(profileId) {
+      return authed()
+        && firestore.exists(/databases/(default)/documents/familyProfiles/$(profileId))
+        && firestore.get(/databases/(default)/documents/familyProfiles/$(profileId)).data.userId == request.auth.uid;
+    }
+
+    // AuPair
+    match /auPairProfiles/{profileId}/{allPaths=**} {
+      allow read: if authed();
+      allow write: if isAuPairProfileOwner(profileId) && isImage() && isSmall();
+    }
+
+    // Family
+    match /familyProfiles/{profileId}/{allPaths=**} {
+      allow read: if authed();
+      allow write: if isFamilyProfileOwner(profileId) && isImage() && isSmall();
+    }
+
+    // コミュニティ投稿の画像 (components/Community.tsx が
+    // community-posts/{uid}/{timestamp}.{ext} にアップロードする)
+    match /community-posts/{uid}/{allPaths=**} {
+      allow read: if authed();
+      allow write: if authed() && request.auth.uid == uid && isImage() && isSmall();
+    }
+  }
+}

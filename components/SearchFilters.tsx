@@ -2,7 +2,7 @@
 
 import { Dispatch, SetStateAction } from "react";
 import { motion } from "motion/react";
-import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import {
@@ -146,34 +146,40 @@ export function SearchFilters({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="mb-6 rounded-3xl border border-orange-100 bg-white/90 p-4 shadow-sm backdrop-blur"
+      className="mb-8 flex justify-center"
     >
-      <Collapsible open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+      <Collapsible open={isSearchOpen} onOpenChange={setIsSearchOpen} className="w-full max-w-2xl">
         <CollapsibleTrigger asChild>
-          <button className="flex w-full items-center justify-between text-left">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-500">
-                <SlidersHorizontal className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-800">Search filters</p>
-                <p className="text-sm text-gray-500">
-                  {resultCount} {resultCount === 1 ? "profile" : "profiles"} found
-                </p>
-              </div>
+          <button className="flex w-full items-center rounded-full border border-gray-200 bg-white py-2 pl-6 pr-2 text-left shadow-[0_1px_2px_rgba(0,0,0,0.08),0_1px_10px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-[0_2px_4px_rgba(0,0,0,0.1),0_4px_16px_rgba(0,0,0,0.08)]">
+            <div className="min-w-0 flex-1 border-r border-gray-200 pr-4">
+              <p className="text-xs font-semibold text-gray-900">Nationality</p>
+              <p className="truncate text-sm text-gray-500">{selectedNationality || "Any nationality"}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1 border-r border-gray-200 px-4">
+              <p className="text-xs font-semibold text-gray-900">Availability</p>
+              <p className="truncate text-sm text-gray-500">{selectedAvailability || "Any time"}</p>
+            </div>
+            <div className="min-w-0 flex-1 px-4">
+              <p className="text-xs font-semibold text-gray-900">{activeTab === "family" ? "Looking for" : "Skill"}</p>
+              <p className="truncate text-sm text-gray-500">{selectedSkill || "Add a skill"}</p>
+            </div>
+            <div className="ml-2 flex items-center gap-2">
               {activeFilterCount > 0 ? (
                 <Badge className="rounded-full bg-orange-100 text-orange-700 hover:bg-orange-100">
                   {activeFilterCount}
                 </Badge>
               ) : null}
-              <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${isSearchOpen ? "rotate-180" : ""}`} />
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-sm">
+                <Search className="h-4 w-4" />
+              </span>
             </div>
           </button>
         </CollapsibleTrigger>
+        <p className="mt-2 text-center text-xs text-gray-400">
+          {resultCount} {resultCount === 1 ? "profile" : "profiles"} found
+        </p>
 
-        <CollapsibleContent className="pt-5">
+        <CollapsibleContent className="mt-4 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
           <div className="mb-4 flex flex-wrap gap-2">
             {quickTags.map((tag) => (
               <button

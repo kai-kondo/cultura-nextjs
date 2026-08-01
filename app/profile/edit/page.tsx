@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { FamilyProfileEdit } from '@/components/FamilyProfileEdit';
-import { AuPairProfileEdit } from '@/components/AuPairProfileEdit';
+import { FamilyProfilePage } from '@/components/FamilyProfilePage';
+import { AuPairProfilePage } from '@/components/AuPairProfilePage';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
 import type { UserType } from '@/lib/types';
 
@@ -56,9 +56,9 @@ export default function ProfileEditPage() {
   return (
     <div className='relative pb-16 lg:pb-0'>
       {userType === 'aupair' ? (
-        <AuPairProfileEdit profileId={profileId} onComplete={handleBack} />
+        <AuPairProfilePage profileId={profileId} onBack={handleBack} />
       ) : (
-        <FamilyProfileEdit profileId={profileId} onComplete={handleBack} />
+        <FamilyProfilePage profileId={profileId} onBack={handleBack} />
       )}
       <MobileBottomNav activeScreen='profile' onNavigate={handleMobileNavigation} />
     </div>

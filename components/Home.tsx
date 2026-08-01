@@ -14,13 +14,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import { SearchFilters } from "./SearchFilters";
-import { ProfileCompactCard } from "./ProfileCompactCard";
+import { AirbnbCard } from "./AirbnbCard";
+import { RecentlyAddedCard } from "./RecentlyAddedCard";
+import { HorizontalScrollRow } from "./HorizontalScrollRow";
+import { FeaturedProfilesGrid } from "./FeaturedProfilesGrid";
 import { TrustSection } from "./TrustSection";
-import { motion, AnimatePresence } from "motion/react";
+import { HowItWorks } from "./HowItWorks";
+import { CommunityHighlights } from "./CommunityHighlights";
+import { motion } from "motion/react";
+import { Users, Home as HomeIcon, Baby } from "lucide-react";
 
 // Minimal card-facing types (derived from FIREBASE_DATA_STRUCTURE.md)
 interface AuPairCardData {
   id: string;
+  userId?: string;
   name: string;
   nationality?: string;
   nationalityCode?: string;
@@ -35,10 +42,12 @@ interface AuPairCardData {
   availability?: string;
   workDays?: string[];
   availableFrom?: string;
+  hourlyRate?: number;
 }
 
 interface FamilyCardData {
   id: string;
+  userId?: string;
   name: string;
   location?: string;
   nationalityCode?: string;
@@ -64,6 +73,19 @@ interface HomeProps {
   onOpenCommunity?: () => void;
 }
 
+function CardRowSkeleton() {
+  return (
+    <div className="flex gap-4 overflow-hidden">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="w-[45vw] shrink-0 space-y-2 sm:w-[220px]">
+          <Skeleton className="aspect-square w-full rounded-xl" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function Home({
   userType,
@@ -73,9 +95,8 @@ export function Home({
   onOpenCommunity,
 }: HomeProps) {
   const [activeTab, setActiveTab] = useState<"aupair" | "babysitter" | "family">(
-
-  userType === "family" ? "aupair" : "family"
-);
+    userType === "family" ? "aupair" : "family"
+  );
   // New filter states
   const [selectedNationality, setSelectedNationality] = useState("");
   const [selectedDesiredCountry, setSelectedDesiredCountry] = useState("");
@@ -90,7 +111,7 @@ export function Home({
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
 
   const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [isSearchOpen, setIsSearchOpen] = useState(true);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const isSearching = false;
 
   const [auPairs, setAuPairs] = useState<AuPairCardData[]>([]);
@@ -116,6 +137,7 @@ export function Home({
         }));
         return {
           id: d.id,
+          userId: p?.userId,
           name: p?.name || "",
           nationality: p?.nationality || p?.originCountry || "",
           nationalityCode:
@@ -143,6 +165,7 @@ export function Home({
           workDays: p?.workDays || p?.availabilityDays || [],
           availableFrom:
             p?.availability?.availableFrom || p?.availableFrom || undefined,
+          hourlyRate: p?.hourlyRate ?? undefined,
           isDeleted: p?.isDeleted === true,
         };
       });
@@ -178,6 +201,7 @@ export function Home({
         }));
         return {
           id: d.id,
+          userId: p?.userId,
           name: p?.familyName || p?.name || "",
           location: [city, country].filter(Boolean).join(", ") || undefined,
           nationalityCode:
@@ -190,7 +214,7 @@ export function Home({
             ? { code: String(primaryLang).toLowerCase(), name: primaryLang }
             : undefined,
           secondaryLanguages: secondary,
-          children: (p?.children || []).map((c: any) => ({
+          children: (p?.children || p?.familyMembers?.children || []).map((c: any) => ({
             age: c?.age,
             emoji: c?.emoji,
           })),
@@ -326,6 +350,43 @@ export function Home({
     [filteredAuPairs]
   );
 
+  // No rating data exists yet, so "featured" is approximated from how complete
+  // a profile is (photo, language, skills/duration filled in) — a reasonable
+  // stand-in signal until real ratings/reviews land.
+  const auPairCompleteness = (p: AuPairCardData) =>
+    (p.imageUrl ? 1 : 0) +
+    (p.primaryLanguage ? 1 : 0) +
+    ((p.skills?.length || 0) > 0 ? 1 : 0) +
+    (p.duration || p.durationMonths ? 1 : 0) +
+    (p.nationality ? 1 : 0);
+
+  const familyCompleteness = (f: FamilyCardData) =>
+    (f.imageUrl ? 1 : 0) +
+    (f.primaryLanguage ? 1 : 0) +
+    ((f.lookingFor?.length || 0) > 0 ? 1 : 0) +
+    ((f.children?.length || 0) > 0 ? 1 : 0) +
+    (f.location ? 1 : 0);
+
+  function pickFeatured<T>(items: T[], score: (item: T) => number, count = 6): T[] {
+    if (items.length < 4) return [];
+    return items
+      .map((item, index) => ({ item, index, score: score(item) }))
+      .filter((entry) => entry.score >= 3)
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .slice(0, count)
+      .map((entry) => entry.item);
+  }
+
+  const featuredRegularAuPairs = useMemo(
+    () => pickFeatured(filteredRegularAuPairs, auPairCompleteness, 10),
+    [filteredRegularAuPairs]
+  );
+
+  const featuredBabysitters = useMemo(
+    () => pickFeatured(filteredBabysitters, auPairCompleteness, 10),
+    [filteredBabysitters]
+  );
+
   const filteredFamilies = useMemo(() => {
     return families.filter((family) => {
       if (
@@ -378,6 +439,11 @@ export function Home({
     selectedDays,
   ]);
 
+  const featuredFamilies = useMemo(
+    () => pickFeatured(filteredFamilies, familyCompleteness, 10),
+    [filteredFamilies]
+  );
+
   const hasActiveFilters = [
     selectedType,
     selectedEthnicity,
@@ -398,26 +464,10 @@ export function Home({
         ? filteredBabysitters.length
         : filteredFamilies.length;
 
-  const title =
-    activeTab === "aupair"
-      ? "Available Au Pairs"
-      : activeTab === "babysitter"
-        ? "Available Babysitters"
-        : "Available Families";
-
-  const subtitle =
-    activeTab === "aupair"
-      ? "Find the perfect match for your family"
-      : activeTab === "babysitter"
-        ? "Find trusted babysitters nearby"
-        : "Find the perfect family for your cultural exchange";
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-amber-50">
-      
-
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-rose-100">
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="mx-auto max-w-[1760px] px-4 py-6 sm:px-8 lg:px-10">
         <SearchFilters
           activeTab={activeTab}
           resultCount={resultCount}
@@ -447,128 +497,98 @@ export function Home({
           setActiveTags={setActiveTags}
         />
 
-        {/* Tab Switcher */}
+        {/* Category tabs — centered modern pill switcher */}
         <Tabs
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as "aupair" | "babysitter" | "family")}
-          className="w-full mb-6"
+          className="w-full"
         >
-          <div className="flex justify-center mb-6">
-            <TabsList className="grid w-full max-w-2xl grid-cols-3 bg-white/70 border border-orange-100">
+          <div className="mb-8 flex justify-center">
+            <TabsList className="h-auto gap-1 rounded-full bg-gray-100 p-1.5">
               <TabsTrigger
                 value="aupair"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-rose-500 data-[state=active]:text-white"
+                className="gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-gray-500 transition-colors data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
               >
-                {userType === "family" ? "Find Au Pairs" : "Browse Au Pairs"}
+                <Users className="h-4 w-4" />
+                Au Pairs
               </TabsTrigger>
               <TabsTrigger
                 value="family"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-rose-500 data-[state=active]:text-white"
+                className="gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-gray-500 transition-colors data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
               >
-                {userType === "aupair" ? "Find Families" : "Browse Families"}
+                <HomeIcon className="h-4 w-4" />
+                Families
               </TabsTrigger>
-              
               <TabsTrigger
                 value="babysitter"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-rose-500 data-[state=active]:text-white"
+                className="gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-gray-500 transition-colors data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
               >
+                <Baby className="h-4 w-4" />
                 Babysitters
               </TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent value="aupair">
-            <motion.div
-              className="mb-6"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <h2 className="text-gray-700">{title}</h2>
-              <p className="text-sm text-gray-500" id="search-results-count">
-                {subtitle}
-                {hasActiveFilters &&
-                  ` • ${resultCount} result${
-                    resultCount !== 1 ? "s" : ""
-                  } found`}
-              </p>
-            </motion.div>
-
+          <TabsContent value="aupair" className="mt-0">
             {isSearching ? (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                {[1, 2, 3, 4].map((i) => (
-                  <motion.div
-                    key={i}
-                    className="space-y-3 w-full"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.1 }}
-                  >
-                    <Skeleton className="h-56 w-full rounded-2xl" />
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
-                  </motion.div>
-                ))}
-              </div>
+              <CardRowSkeleton />
             ) : filteredRegularAuPairs.length > 0 ? (
-              <motion.div
-                className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <AnimatePresence mode="popLayout">
-                  {filteredRegularAuPairs.map((auPair, index) => (
-                    <motion.div
-                      key={auPair.id}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ delay: index * 0.05 }}
-                      layout
-                      className="w-full"
-                    >
-                      <ProfileCompactCard
-                        name={auPair.name}
-                        imageUrl={auPair.imageUrl || ""}
-                        location={auPair.nationality || ""}
-                        profileType="aupair"
-                        primaryLabel={auPair.primaryLanguage?.name}
-                        secondaryLabel={
+              <>
+                {featuredRegularAuPairs.length > 0 ? (
+                  <FeaturedProfilesGrid title="Featured au pairs">
+                    {featuredRegularAuPairs.map((auPair) => (
+                      <AirbnbCard
+                        key={auPair.id}
+                        id={auPair.id}
+                        userId={auPair.userId}
+                        imageUrl={auPair.imageUrl}
+                        badge={auPair.flag ? `${auPair.flag} ${auPair.nationality || ""}`.trim() : undefined}
+                        title={auPair.name}
+                        subtitle={auPair.primaryLanguage?.name}
+                        meta={
                           auPair.duration ||
-                          (auPair.durationMonths
-                            ? `${auPair.durationMonths} months`
-                            : undefined)
+                          (auPair.durationMonths ? `${auPair.durationMonths} months` : auPair.availableFrom || "Flexible")
                         }
                         onClick={() => onViewProfile?.(auPair.id)}
                       />
-                    </motion.div>
+                    ))}
+                  </FeaturedProfilesGrid>
+                ) : null}
+
+                <HorizontalScrollRow title="Au pairs recently added">
+                  {filteredRegularAuPairs.map((auPair) => (
+                    <div key={auPair.id} className="w-[82vw] shrink-0 sm:w-[360px]">
+                      <RecentlyAddedCard
+                        id={auPair.id}
+                        userId={auPair.userId}
+                        imageUrl={auPair.imageUrl}
+                        badge={auPair.flag ? `${auPair.flag} ${auPair.nationality || ""}`.trim() : undefined}
+                        title={auPair.name}
+                        subtitle={auPair.primaryLanguage?.name}
+                        meta={
+                          auPair.duration ||
+                          (auPair.durationMonths ? `${auPair.durationMonths} months` : auPair.availableFrom || "Flexible")
+                        }
+                        onClick={() => onViewProfile?.(auPair.id)}
+                      />
+                    </div>
                   ))}
-                </AnimatePresence>
-              </motion.div>
+                </HorizontalScrollRow>
+              </>
             ) : (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-center py-16 bg-white/50 rounded-2xl border border-orange-100"
+                className="rounded-2xl border border-gray-200 bg-gray-50 py-16 text-center"
               >
-                <motion.div
-                  className="text-6xl mb-4"
-                  animate={{ rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 1, repeat: Infinity, repeatDelay: 2 }}
-                >
-                  🔍
-                </motion.div>
-                <h3 className="text-gray-700 mb-2">No results found</h3>
-                <p className="text-gray-500 mb-6">
-                  Try adjusting your filters or search criteria
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  <span className="text-sm text-gray-600">
-                    Try these instead:
-                  </span>
+                <div className="mb-4 text-5xl">🔍</div>
+                <h3 className="mb-2 text-gray-700">No results found</h3>
+                <p className="mb-6 text-gray-500">Try adjusting your filters or search criteria</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <span className="text-sm text-gray-600">Try these instead:</span>
                   <Badge
                     variant="outline"
-                    className="cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors"
+                    className="cursor-pointer transition-colors hover:border-gray-400 hover:bg-white"
                     onClick={() => {
                       setSelectedNationality("fr");
                       setSelectedDesiredCountry("");
@@ -581,7 +601,7 @@ export function Home({
                   </Badge>
                   <Badge
                     variant="outline"
-                    className="cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors"
+                    className="cursor-pointer transition-colors hover:border-gray-400 hover:bg-white"
                     onClick={() => {
                       setSelectedNationality("");
                       setSelectedDesiredCountry("");
@@ -597,185 +617,128 @@ export function Home({
             )}
           </TabsContent>
 
-          <TabsContent value="babysitter">
-            <motion.div
-              className="mb-6"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <h2 className="text-gray-700">Available Babysitters</h2>
-              <p className="text-sm text-gray-500" id="babysitter-search-results-count">
-                Find trusted babysitters nearby
-                {hasActiveFilters &&
-                  ` • ${filteredBabysitters.length} result${
-                    filteredBabysitters.length !== 1 ? "s" : ""
-                  } found`}
-              </p>
-            </motion.div>
-
+          <TabsContent value="babysitter" className="mt-0">
             {isSearching ? (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                {[1, 2, 3, 4].map((i) => (
-                  <motion.div
-                    key={i}
-                    className="space-y-3 w-full"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.1 }}
-                  >
-                    <Skeleton className="h-56 w-full rounded-2xl" />
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
-                  </motion.div>
-                ))}
-              </div>
+              <CardRowSkeleton />
             ) : filteredBabysitters.length > 0 ? (
-              <motion.div
-                className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <AnimatePresence mode="popLayout">
-                  {filteredBabysitters.map((babysitter, index) => (
-                    <motion.div
-                      key={babysitter.id}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ delay: index * 0.05 }}
-                      layout
-                      className="w-full"
-                    >
-                      <ProfileCompactCard
-                        name={babysitter.name}
-                        imageUrl={babysitter.imageUrl || ""}
-                        location={(babysitter as any).location || babysitter.nationality || ""}
-                        profileType="babysitter"
-                        primaryLabel={babysitter.primaryLanguage?.name}
-                        secondaryLabel={
-                          (babysitter as any).hourlyRate
-                            ? `$${(babysitter as any).hourlyRate}/hr`
-                            : babysitter.availableFrom || undefined
-                        }
+              <>
+                {featuredBabysitters.length > 0 ? (
+                  <FeaturedProfilesGrid title="Featured babysitters">
+                    {featuredBabysitters.map((babysitter) => (
+                      <AirbnbCard
+                        key={babysitter.id}
+                        id={babysitter.id}
+                        userId={babysitter.userId}
+                        imageUrl={babysitter.imageUrl}
+                        badge={babysitter.hourlyRate ? `${babysitter.hourlyRate}/hr` : undefined}
+                        title={babysitter.name}
+                        subtitle={babysitter.nationality}
+                        meta={babysitter.availableFrom ? `Available ${babysitter.availableFrom}` : "Flexible"}
                         onClick={() => onViewProfile?.(babysitter.id)}
                       />
-                    </motion.div>
+                    ))}
+                  </FeaturedProfilesGrid>
+                ) : null}
+
+                <HorizontalScrollRow title="Babysitters near you">
+                  {filteredBabysitters.map((babysitter) => (
+                    <div key={babysitter.id} className="w-[82vw] shrink-0 sm:w-[360px]">
+                      <RecentlyAddedCard
+                        id={babysitter.id}
+                        userId={babysitter.userId}
+                        imageUrl={babysitter.imageUrl}
+                        badge={babysitter.hourlyRate ? `${babysitter.hourlyRate}/hr` : undefined}
+                        title={babysitter.name}
+                        subtitle={babysitter.nationality}
+                        meta={babysitter.availableFrom ? `Available ${babysitter.availableFrom}` : "Flexible"}
+                        onClick={() => onViewProfile?.(babysitter.id)}
+                      />
+                    </div>
                   ))}
-                </AnimatePresence>
-              </motion.div>
+                </HorizontalScrollRow>
+              </>
             ) : (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-center py-16 bg-white/50 rounded-2xl border border-purple-100"
+                className="rounded-2xl border border-gray-200 bg-gray-50 py-16 text-center"
               >
-                <motion.div
-                  className="text-6xl mb-4"
-                  animate={{ rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 1, repeat: Infinity, repeatDelay: 2 }}
-                >
-                  👶
-                </motion.div>
-                <h3 className="text-gray-700 mb-2">No babysitters found</h3>
-                <p className="text-gray-500 mb-6">
-                  Try adjusting your filters or checking back later
-                </p>
+                <div className="mb-4 text-5xl">👶</div>
+                <h3 className="mb-2 text-gray-700">No babysitters found</h3>
+                <p className="text-gray-500">Try adjusting your filters or checking back later</p>
               </motion.div>
             )}
           </TabsContent>
-          <TabsContent value="family">
-            <motion.div
-              className="mb-6"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <h2 className="text-gray-700">{title}</h2>
-              <p className="text-sm text-gray-500" id="search-results-count">
-                {subtitle}
-                {hasActiveFilters &&
-                  ` • ${resultCount} result${
-                    resultCount !== 1 ? "s" : ""
-                  } found`}
-              </p>
-            </motion.div>
 
+          <TabsContent value="family" className="mt-0">
             {isSearching ? (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                {[1, 2, 3, 4].map((i) => (
-                  <motion.div
-                    key={i}
-                    className="space-y-3 w-full"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.1 }}
-                  >
-                    <Skeleton className="h-56 w-full rounded-2xl" />
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
-                  </motion.div>
-                ))}
-              </div>
+              <CardRowSkeleton />
             ) : filteredFamilies.length > 0 ? (
-              <motion.div
-                className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <AnimatePresence mode="popLayout">
-                  {filteredFamilies.map((family, index) => (
-                    <motion.div
-                      key={family.id}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ delay: index * 0.05 }}
-                      layout
-                      className="w-full"
-                    >
-                      <ProfileCompactCard
-                        name={family.name}
-                        imageUrl={family.imageUrl || ""}
-                        location={family.location || ""}
-                        profileType="family"
-                        primaryLabel={family.primaryLanguage?.name}
-                        secondaryLabel={
+              <>
+                {featuredFamilies.length > 0 ? (
+                  <FeaturedProfilesGrid title="Featured host families">
+                    {featuredFamilies.map((family) => (
+                      <AirbnbCard
+                        key={family.id}
+                        id={family.id}
+                        userId={family.userId}
+                        imageUrl={family.imageUrl}
+                        badge={family.flag ? `${family.flag}` : undefined}
+                        title={family.name}
+                        subtitle={family.location}
+                        meta={
                           family.children?.length
-                            ? `${family.children.length} children`
-                            : family.lookingForType || undefined
+                            ? `${family.children.length} ${family.children.length === 1 ? "child" : "children"}`
+                            : family.lookingForType || "Flexible"
                         }
                         onClick={() => onViewProfile?.(family.id)}
                       />
-                    </motion.div>
+                    ))}
+                  </FeaturedProfilesGrid>
+                ) : null}
+
+                <HorizontalScrollRow title="Host families looking now">
+                  {filteredFamilies.map((family) => (
+                    <div key={family.id} className="w-[82vw] shrink-0 sm:w-[360px]">
+                      <RecentlyAddedCard
+                        id={family.id}
+                        userId={family.userId}
+                        imageUrl={family.imageUrl}
+                        badge={family.flag ? `${family.flag}` : undefined}
+                        title={family.name}
+                        subtitle={family.location}
+                        meta={
+                          family.children?.length
+                            ? `${family.children.length} ${family.children.length === 1 ? "child" : "children"}`
+                            : family.lookingForType || "Flexible"
+                        }
+                        onClick={() => onViewProfile?.(family.id)}
+                      />
+                    </div>
                   ))}
-                </AnimatePresence>
-              </motion.div>
+                </HorizontalScrollRow>
+              </>
             ) : (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-center py-16 bg-white/50 rounded-2xl border border-orange-100"
+                className="rounded-2xl border border-gray-200 bg-gray-50 py-16 text-center"
               >
-                <motion.div
-                  className="text-6xl mb-4"
-                  animate={{ rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 1, repeat: Infinity, repeatDelay: 2 }}
-                >
-                  🔍
-                </motion.div>
-                <h3 className="text-gray-700 mb-2">
-                  No families match your criteria
-                </h3>
-                <p className="text-gray-500 mb-6">Try broadening your search</p>
+                <div className="mb-4 text-5xl">🔍</div>
+                <h3 className="mb-2 text-gray-700">No families match your criteria</h3>
+                <p className="text-gray-500">Try broadening your search</p>
               </motion.div>
             )}
           </TabsContent>
         </Tabs>
 
-        <TrustSection />
-      </main>
+        <HowItWorks />
+        <CommunityHighlights />
 
+        <div className="mt-10">
+          <TrustSection />
+        </div>
+      </main>
     </div>
   );
 }

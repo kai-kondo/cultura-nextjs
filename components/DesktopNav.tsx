@@ -41,8 +41,8 @@ export function DesktopNav({
         size="sm"
         className={`h-11 rounded-full px-3 transition-all ${
           isCommunityActive
-            ? "gap-2 bg-orange-50 text-orange-700 hover:bg-orange-100"
-            : "w-11 px-0 text-gray-700 hover:bg-orange-50 hover:text-orange-800"
+            ? "gap-2 bg-gray-100 text-gray-900 hover:bg-gray-100"
+            : "w-11 px-0 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
         }`}
         onClick={onOpenCommunity}
         aria-label="Community"
@@ -57,8 +57,8 @@ export function DesktopNav({
         size="sm"
         className={`relative h-11 rounded-full px-3 transition-all ${
           isNotificationsActive
-            ? "gap-2 bg-orange-50 text-orange-700 hover:bg-orange-100"
-            : "w-11 px-0 text-gray-700 hover:bg-orange-50 hover:text-orange-800"
+            ? "gap-2 bg-gray-100 text-gray-900 hover:bg-gray-100"
+            : "w-11 px-0 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
         }`}
         onClick={() => router.push("/notifications")}
         aria-label="Notifications"
@@ -79,15 +79,15 @@ export function DesktopNav({
         size="sm"
         className={`h-11 rounded-full px-3 transition-all ${
           isProfileActive
-            ? "gap-2 bg-orange-50 text-orange-700 hover:bg-orange-100"
-            : "w-11 px-0 text-gray-700 hover:bg-orange-50 hover:text-orange-800"
+            ? "gap-2 bg-gray-100 text-gray-900 hover:bg-gray-100"
+            : "w-11 px-0 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
         }`}
         onClick={onOpenProfile}
         aria-label="My profile"
       >
-        <Avatar className="h-8 w-8 border border-orange-100">
+        <Avatar className="h-8 w-8 border border-gray-200">
           {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
-          <AvatarFallback className="bg-orange-100 text-orange-800">
+          <AvatarFallback className="bg-gray-200 text-gray-700">
             <User className="h-4 w-4" />
           </AvatarFallback>
         </Avatar>
@@ -100,8 +100,8 @@ export function DesktopNav({
         size="sm"
         className={`h-11 rounded-full px-3 transition-all ${
           isSettingsActive
-            ? "gap-2 bg-orange-50 text-orange-700 hover:bg-orange-100"
-            : "w-11 px-0 text-gray-700 hover:bg-orange-50 hover:text-orange-800"
+            ? "gap-2 bg-gray-100 text-gray-900 hover:bg-gray-100"
+            : "w-11 px-0 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
         }`}
         onClick={onOpenSettings}
         aria-label="Settings"
